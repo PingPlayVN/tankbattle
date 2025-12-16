@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>WindHouse - Tank Battle (v56 Custom Controls)</title>
+    <title>WindHouse - Tank Battle (v57 Swap Controls)</title>
     <style>
         /* --- CSS CỐT LÕI & RESPONSIVE --- */
         body { 
@@ -96,11 +96,16 @@
         
         .control-set { 
             position: absolute; top: 0; bottom: 0; width: 120px; 
-            display: flex; flex-direction: column; /* Xếp dọc */
+            display: flex; flex-direction: column; /* Mặc định: Fire trên, Joy dưới */
             justify-content: center; align-items: center;
             gap: 30px; /* Khoảng cách giữa nút bắn và cần gạt */
             pointer-events: none; 
-            transform-origin: center center; /* Để scale hoạt động từ tâm */
+            transform-origin: center center;
+        }
+
+        /* Khi class 'swapped' được thêm vào, thứ tự sẽ đảo ngược */
+        .control-set.swapped {
+            flex-direction: column-reverse; /* Joy trên, Fire dưới */
         }
 
         .control-set.p1-set { left: 10px; }
@@ -212,6 +217,9 @@
         .btn-apply { width: 100%; padding: 10px; font-weight: bold; text-transform: uppercase; border: 1px solid transparent; border-radius: 4px; cursor: pointer; transition: 0.2s; flex-shrink: 0; margin-bottom: 5px; margin-top: 10px; touch-action: manipulation; }
         .btn-apply.valid { background: linear-gradient(to bottom, #2e7d32, #1b5e20); color: #fff; }
         .btn-apply.invalid { background: #222; color: #555; border-color: #333; cursor: not-allowed; }
+        
+        /* Checkbox Style for Swap */
+        input[type="checkbox"] { width: 16px; height: 16px; accent-color: #d32f2f; cursor: pointer; }
     </style>
 </head>
 <body>
@@ -263,7 +271,7 @@
             <button class="btn-main btn-guide" onclick="openGuide()">ARMORY</button>
         </div>
         <div style="margin-top: 40px; font-size: 10px; color: #555; font-weight: bold; letter-spacing: 1px; text-transform: uppercase;">
-            [F] Fullscreen | v56.0 Configurable Mobile
+            [F] Fullscreen | v57.0 Swap Controls & AI Hide
         </div>
     </div>
 
@@ -386,10 +394,10 @@
         p2: { x: 0, y: 0, fire: false }
     };
 
-    // MOBILE CONFIG STATE
+    // MOBILE CONFIG STATE (Updated with swap)
     let mobileSettings = {
-        p1: { sensitivity: 1.0, size: 100 },
-        p2: { sensitivity: 1.0, size: 100 }
+        p1: { sensitivity: 1.0, size: 100, swap: false },
+        p2: { sensitivity: 1.0, size: 100, swap: false }
     };
 
     let scores = { p1: 0, p2: 0 };
@@ -1270,7 +1278,7 @@
     }
 
     function renderMobileSettings(container) {
-        container.innerHTML = `
+        let html = `
             <div class="panel-header">MOBILE CONFIG</div>
             
             <div class="sub-header" style="color:#66bb6a;">PLAYER 1</div>
@@ -1282,17 +1290,34 @@
                 <div class="custom-label">Button Size <span id="valSizeP1">${mobileSettings.p1.size}%</span></div>
                 <input type="range" min="50" max="150" step="5" value="${mobileSettings.p1.size}" class="custom-range" oninput="updateMobileConfig('p1', 'size', this.value)">
             </div>
-
-            <div class="sub-header" style="color:#ef5350; margin-top:20px;">PLAYER 2</div>
             <div class="custom-row">
-                <div class="custom-label">Sensitivity (Turn Speed) <span id="valSensP2">${mobileSettings.p2.sensitivity.toFixed(1)}</span></div>
-                <input type="range" min="0.5" max="3.0" step="0.1" value="${mobileSettings.p2.sensitivity}" class="custom-range" oninput="updateMobileConfig('p2', 'sensitivity', this.value)">
-            </div>
-            <div class="custom-row">
-                <div class="custom-label">Button Size <span id="valSizeP2">${mobileSettings.p2.size}%</span></div>
-                <input type="range" min="50" max="150" step="5" value="${mobileSettings.p2.size}" class="custom-range" oninput="updateMobileConfig('p2', 'size', this.value)">
+                <div class="custom-label">Swap Joystick/Fire</div>
+                <input type="checkbox" ${mobileSettings.p1.swap ? 'checked' : ''} onchange="updateMobileConfig('p1', 'swap', this.checked)">
             </div>
         `;
+
+        // Chỉ hiển thị cài đặt P2 nếu KHÔNG phải chế độ PvE (AI)
+        if (gameMode !== 'pve') {
+            html += `
+                <div class="sub-header" style="color:#ef5350; margin-top:20px;">PLAYER 2</div>
+                <div class="custom-row">
+                    <div class="custom-label">Sensitivity (Turn Speed) <span id="valSensP2">${mobileSettings.p2.sensitivity.toFixed(1)}</span></div>
+                    <input type="range" min="0.5" max="3.0" step="0.1" value="${mobileSettings.p2.sensitivity}" class="custom-range" oninput="updateMobileConfig('p2', 'sensitivity', this.value)">
+                </div>
+                <div class="custom-row">
+                    <div class="custom-label">Button Size <span id="valSizeP2">${mobileSettings.p2.size}%</span></div>
+                    <input type="range" min="50" max="150" step="5" value="${mobileSettings.p2.size}" class="custom-range" oninput="updateMobileConfig('p2', 'size', this.value)">
+                </div>
+                <div class="custom-row">
+                    <div class="custom-label">Swap Joystick/Fire</div>
+                    <input type="checkbox" ${mobileSettings.p2.swap ? 'checked' : ''} onchange="updateMobileConfig('p2', 'swap', this.checked)">
+                </div>
+            `;
+        } else {
+            html += `<div style="margin-top:20px; color:#888; font-size:11px; text-align:center;">PLAYER 2 IS AI BOT</div>`;
+        }
+
+        container.innerHTML = html;
     }
 
     function renderPCControls(container) {
@@ -1326,17 +1351,26 @@
     }
 
     function updateMobileConfig(player, type, value) {
-        value = parseFloat(value);
-        if (type === 'sensitivity') {
-            mobileSettings[player].sensitivity = value;
-            document.getElementById(`valSens${player === 'p1' ? 'P1' : 'P2'}`).innerText = value.toFixed(1);
-        } else if (type === 'size') {
-            mobileSettings[player].size = value;
-            document.getElementById(`valSize${player === 'p1' ? 'P1' : 'P2'}`).innerText = value + '%';
-            // Apply scale immediately
-            const scale = value / 100;
+        if (type === 'swap') {
+            mobileSettings[player].swap = value;
             const setEl = document.querySelector(`.${player}-set`);
-            if(setEl) setEl.style.transform = `scale(${scale})`;
+            if(setEl) {
+                if(value) setEl.classList.add('swapped');
+                else setEl.classList.remove('swapped');
+            }
+        } else {
+            value = parseFloat(value);
+            if (type === 'sensitivity') {
+                mobileSettings[player].sensitivity = value;
+                document.getElementById(`valSens${player === 'p1' ? 'P1' : 'P2'}`).innerText = value.toFixed(1);
+            } else if (type === 'size') {
+                mobileSettings[player].size = value;
+                document.getElementById(`valSize${player === 'p1' ? 'P1' : 'P2'}`).innerText = value + '%';
+                // Apply scale immediately
+                const scale = value / 100;
+                const setEl = document.querySelector(`.${player}-set`);
+                if(setEl) setEl.style.transform = `scale(${scale})`;
+            }
         }
     }
 
