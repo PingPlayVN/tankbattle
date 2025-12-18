@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>WindHouse - Tank Battle (v63.2 Fixed - Mod)</title>
+    <title>WindHouse - Tank Battle (v64.0 - UI & Mechanic Mod)</title>
     <style>
         /* --- CSS CỐT LÕI & RESPONSIVE --- */
         body { 
@@ -145,7 +145,7 @@
         .hud-info { display: flex; flex-direction: column; }
         .hud-name { font-size: 1.5vh; font-weight: bold; color: #888; letter-spacing: 1px; margin-bottom: 2px; }
         .hud-score { font-size: 4vh; font-weight: 900; line-height: 1; color: #fff; text-shadow: 0 0 10px rgba(255,255,255,0.3); }
-        .hud-ammo-box { display: flex; gap: 3px; background: #000; padding: 4px; border-radius: 4px; border: 1px solid #333; height: 22px; align-items: center; } /* Adjusted for consistent height */
+        .hud-ammo-box { display: flex; gap: 3px; background: #000; padding: 4px; border-radius: 4px; border: 1px solid #333; height: 22px; align-items: center; min-width: 100px; justify-content: flex-start; } /* Adjusted for consistent height */
         .bullet-notch { width: 6px; height: 12px; background-color: #222; transform: skewX(-20deg); border: 1px solid #111; }
         .p1-ammo .bullet-notch.filled { background: #4CAF50; box-shadow: 0 0 8px #4CAF50; border-color: #81C784; }
         .p2-ammo .bullet-notch.filled { background: #f44336; box-shadow: 0 0 8px #f44336; border-color: #e57373; }
@@ -457,7 +457,7 @@
             <button class="btn-main btn-guide" onclick="window.openGuide()">ARMORY</button>
         </div>
         <div style="margin-top: 40px; font-size: 10px; color: #555; font-weight: bold; letter-spacing: 1px; text-transform: uppercase;">
-            [F] Fullscreen | v63.2 Fixed (Mod)
+            [F] Fullscreen | v64.0 (Mod)
         </div>
     </div>
 
@@ -1103,6 +1103,7 @@
             this.currentVx = 0; this.currentVy = 0;
             this.aiPathTimer = 0; this.aiCurrentPath = []; this.aiTargetCell = null;
             this.trackTimer = 0;
+            this.needsTriggerReset = false; // MOD: New flag for trigger reset
             
             // AI Specific
             this.aiMode = 'SEEK'; // 'SEEK', 'AIM_LOCK'
@@ -1158,15 +1159,30 @@
                 this.angle += 0.01; this.spinTimer--;
                 activeLasers.push(new LaserBeam(this.x, this.y, this.angle, this, 2)); activeLasers.push(new LaserBeam(this.x, this.y, this.angle + Math.PI, this, 2));
                 if(this.spinTimer % 10 === 0) createSparks(this.x, this.y, WEAPONS.DEATHRAY.color, 2);
-                if (this.spinTimer <= 0) { this.spinning = false; this.setWeapon('NORMAL'); }
+                if (this.spinTimer <= 0) { 
+                    this.spinning = false; 
+                    this.setWeapon('NORMAL'); 
+                    this.needsTriggerReset = true; // MOD: Force reset after deathray
+                }
                 return;
             }
-            if(this.weaponType==='NORMAL' && this.ammo<this.maxAmmo) { this.reloadTimer++; if(this.reloadTimer>=RELOAD_TIME){ this.ammo++; this.reloadTimer=0; } } else this.reloadTimer=0;
-            if(this.weaponType!=='NORMAL' && this.ammo<=0) this.setWeapon('NORMAL');
+            
+            // RELOAD LOGIC
+            if(this.weaponType==='NORMAL' && this.ammo<this.maxAmmo) { 
+                this.reloadTimer++; if(this.reloadTimer>=RELOAD_TIME){ this.ammo++; this.reloadTimer=0; } 
+            } else this.reloadTimer=0;
+            
+            // MODIFIED: WEAPON DEPLETION LOGIC (Forces Trigger Reset)
+            if(this.weaponType!=='NORMAL' && this.ammo<=0) {
+                this.setWeapon('NORMAL');
+                this.needsTriggerReset = true; // Flag to stop auto-shooting normal ammo
+            }
 
             // --- MOVEMENT LOGIC ---
             if (!this.isAI) {
                 let spd = 0;
+                let firing = false;
+
                 if (isMobile) {
                     let input = this.pKey === 'p1' ? mobileInput.p1 : mobileInput.p2;
                     if (Math.abs(input.x) > 0.1 || Math.abs(input.y) > 0.1) {
@@ -1177,15 +1193,25 @@
                          this.angle += Math.sign(diff) * Math.min(Math.abs(diff), 0.1 * sens);
                          spd = 2; 
                     }
-                    if (input.fire) this.shoot(walls);
+                    if (input.fire) firing = true;
                 }  else {
                     let c = controls[this.pKey];
                     if(keys[c.left]) this.angle-=0.05; if(keys[c.right]) this.angle+=0.05;
                     if(keys[c.up]) spd=2; else if(keys[c.down]) spd=-2;
-                    
-                    // PC Auto-fire logic
-                    if (keys[c.shoot]) this.shoot(walls);
+                    if (keys[c.shoot]) firing = true;
                 }
+                
+                // MODIFIED: TRIGGER RESET CHECK
+                if (this.needsTriggerReset) {
+                    if (!firing) {
+                        this.needsTriggerReset = false; // Released! Reset flag
+                    } else {
+                        firing = false; // Block shooting until released
+                    }
+                }
+
+                if (firing) this.shoot(walls);
+
                 if(spd!==0) {
                     this.currentVx = Math.cos(this.angle)*spd; this.currentVy = Math.sin(this.angle)*spd;
                     if(!checkWallCollision(this.x + this.currentVx, this.y, this.hitbox)) { this.x += this.currentVx; }
@@ -1211,7 +1237,9 @@
         shoot(walls) {
             if(this.dead || this.ammo<=0 || this.cooldownTimer>0) return;
             if (this.weaponType === 'SHIELD') {
-                this.activeShield = true; this.shieldTimer = 5 * 60; this.setWeapon('NORMAL'); this.ammo = 5; this.cachedAmmo = -1; createSparks(this.x, this.y, "#fff", 30); return; 
+                this.activeShield = true; this.shieldTimer = 5 * 60; this.setWeapon('NORMAL'); this.ammo = 5; this.cachedAmmo = -1; 
+                this.needsTriggerReset = true; // Also force reset for shield use
+                createSparks(this.x, this.y, "#fff", 30); return; 
             }
             if (this.weaponType === 'MINE') {
                 let mx = this.x - Math.cos(this.angle) * 26; let my = this.y - Math.sin(this.angle) * 26;
@@ -1850,32 +1878,46 @@
         p.cachedAmmo = p.ammo; p.cachedWeapon = p.weaponType; const bar=document.getElementById(p.uiId); if(!bar) return; 
         while(bar.firstChild) bar.removeChild(bar.firstChild);
         
-        // CUSTOM UI FOR FLAME (FUEL BAR)
+        // MODIFIED: UPGRADED UI FOR FLAME (FUEL BAR)
         if (p.weaponType === 'FLAME') {
+            const pct = (p.ammo / p.maxAmmo) * 100;
+            
             const fuelContainer = document.createElement('div');
-            fuelContainer.style.width = '100%';
-            fuelContainer.style.height = '100%';
-            fuelContainer.style.backgroundColor = '#222';
-            fuelContainer.style.border = '1px solid #444';
-            fuelContainer.style.borderRadius = '2px';
+            // Container styling
+            fuelContainer.style.width = '100px'; // Fixed consistent width
+            fuelContainer.style.height = '14px';
+            fuelContainer.style.backgroundColor = '#111';
+            fuelContainer.style.border = '1px solid #555';
+            fuelContainer.style.borderRadius = '3px';
             fuelContainer.style.overflow = 'hidden';
             fuelContainer.style.position = 'relative';
+            fuelContainer.style.boxShadow = 'inset 0 0 5px #000';
 
             const fuelLevel = document.createElement('div');
+            // Bar styling
             fuelLevel.style.height = '100%';
-            const pct = (p.ammo / p.maxAmmo) * 100;
             fuelLevel.style.width = pct + '%';
-            fuelLevel.style.background = 'linear-gradient(90deg, #ff9800, #ff5722)';
-            fuelLevel.style.boxShadow = '0 0 10px #ff5722';
-            fuelLevel.style.transition = 'width 0.05s linear';
+            fuelLevel.style.background = 'linear-gradient(90deg, #ff9800, #ff3d00)'; // Nicer gradient
+            fuelLevel.style.boxShadow = '0 0 8px #ff5722';
+            fuelLevel.style.transition = 'width 0.1s linear';
             
-            // Optional: Add text "FUEL"
+            // Text Label
             const text = document.createElement('div');
             text.innerText = "FUEL";
             text.style.position = 'absolute';
-            text.style.top = '50%'; text.style.left = '50%'; text.style.transform = 'translate(-50%, -50%)';
-            text.style.fontSize = '9px'; text.style.color = '#fff'; text.style.fontWeight = 'bold'; text.style.textShadow = '0 0 2px #000';
-            text.style.pointerEvents = 'none';
+            text.style.top = '0'; 
+            text.style.left = '0'; 
+            text.style.width = '100%';
+            text.style.height = '100%';
+            text.style.display = 'flex';
+            text.style.alignItems = 'center';
+            text.style.justifyContent = 'center';
+            text.style.fontSize = '9px'; 
+            text.style.color = '#fff'; 
+            text.style.fontWeight = '900'; 
+            text.style.textShadow = '0 1px 2px #000';
+            text.style.letterSpacing = '1px';
+            text.style.zIndex = '2';
 
             fuelContainer.appendChild(fuelLevel);
             fuelContainer.appendChild(text);
