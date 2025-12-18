@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>WindHouse - Tank Battle (v57 Swap Controls)</title>
+    <title>WindHouse - Tank Battle (v63.2 Fixed - Mod)</title>
     <style>
         /* --- CSS CỐT LÕI & RESPONSIVE --- */
         body { 
@@ -60,13 +60,13 @@
         #gameCanvas { z-index: 2; cursor: crosshair; background: transparent; }
         
         /* --- UI LAYER --- */
-        #menuOverlay, #guideModal, #settingsModal, #modeSelectModal, #deviceSelectModal { 
+        #menuOverlay, #guideModal, #settingsModal, #modeSelectModal, #deviceSelectModal, #aiAdviceModal { 
             position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
             display: flex; flex-direction: column; justify-content: center; align-items: center; 
             z-index: 100; color: #fff; pointer-events: auto;
         }
         #menuOverlay { background: radial-gradient(circle at center, rgba(20,20,20,0.95) 0%, rgba(5,5,5,0.98) 100%); z-index: 300; }
-        #settingsModal, #guideModal, #modeSelectModal { display: none; background: rgba(0,0,0,0.96); z-index: 400; }
+        #settingsModal, #guideModal, #modeSelectModal, #aiAdviceModal { display: none; background: rgba(0,0,0,0.96); z-index: 400; }
         #deviceSelectModal { z-index: 500; background: #000; }
 
         /* MENU ELEMENTS */
@@ -91,23 +91,15 @@
         .btn-start { background: linear-gradient(135deg, #d32f2f, #9a0007); color: white; text-shadow: 0 2px 0 rgba(0,0,0,0.3); }
         .btn-guide { background: transparent; color: #888; border: 2px solid #333; font-size: 16px; padding: 15px 30px; }
 
-        /* --- MOBILE CONTROLS (FIRE TRÊN, JOYSTICK DƯỚI) --- */
+        /* --- MOBILE CONTROLS --- */
         #mobileControls { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 80; display: none; pointer-events: none; }
         
         .control-set { 
             position: absolute; top: 0; bottom: 0; width: 120px; 
-            display: flex; flex-direction: column; /* Mặc định: Fire trên, Joy dưới */
-            justify-content: center; align-items: center;
-            gap: 30px; /* Khoảng cách giữa nút bắn và cần gạt */
-            pointer-events: none; 
-            transform-origin: center center;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            gap: 30px; pointer-events: none; transform-origin: center center;
         }
-
-        /* Khi class 'swapped' được thêm vào, thứ tự sẽ đảo ngược */
-        .control-set.swapped {
-            flex-direction: column-reverse; /* Joy trên, Fire dưới */
-        }
-
+        .control-set.swapped { flex-direction: column-reverse; }
         .control-set.p1-set { left: 10px; }
         .control-set.p2-set { right: 10px; }
 
@@ -153,7 +145,7 @@
         .hud-info { display: flex; flex-direction: column; }
         .hud-name { font-size: 1.5vh; font-weight: bold; color: #888; letter-spacing: 1px; margin-bottom: 2px; }
         .hud-score { font-size: 4vh; font-weight: 900; line-height: 1; color: #fff; text-shadow: 0 0 10px rgba(255,255,255,0.3); }
-        .hud-ammo-box { display: flex; gap: 3px; background: #000; padding: 4px; border-radius: 4px; border: 1px solid #333; }
+        .hud-ammo-box { display: flex; gap: 3px; background: #000; padding: 4px; border-radius: 4px; border: 1px solid #333; height: 22px; align-items: center; } /* Adjusted for consistent height */
         .bullet-notch { width: 6px; height: 12px; background-color: #222; transform: skewX(-20deg); border: 1px solid #111; }
         .p1-ammo .bullet-notch.filled { background: #4CAF50; box-shadow: 0 0 8px #4CAF50; border-color: #81C784; }
         .p2-ammo .bullet-notch.filled { background: #f44336; box-shadow: 0 0 8px #f44336; border-color: #e57373; }
@@ -173,14 +165,167 @@
         .pause-layout { display: flex; gap: 20px; align-items: stretch; justify-content: center; height: 80%; }
         .pause-panel { background: rgba(20, 20, 20, 0.95); border: 1px solid #444; padding: 20px; border-radius: 8px; width: 300px; display: flex; flex-direction: column; }
         .pause-panel.system { border-top: 4px solid #fff; width: 200px; }
-        .pause-panel.settings { border-top: 4px solid #00ffff; width: 340px; position: relative; overflow: hidden; }
-        .pause-panel.controls { border-top: 4px solid #ffaa00; width: 280px; overflow-y: auto; }
+        /* OPTIMIZED SETTINGS PANEL STYLE */
+        .pause-panel.settings { 
+            border-top: 4px solid #00ffff; 
+            width: 266px; /* MODIFIED: 2/3 of original 400px */
+            position: relative; 
+            overflow: hidden; 
+            padding: 0; 
+            background: #0f0f0f;
+        }
+        
+        .pause-panel.controls { border-top: 4px solid #ffaa00; width: 320px; overflow-y: auto; background: rgba(18, 18, 18, 0.98); }
         .pause-panel.controls::-webkit-scrollbar { width: 4px; }
         .pause-panel.controls::-webkit-scrollbar-thumb { background: #444; }
+        
+        /* New Settings Internal Layout */
+        .settings-header-fixed {
+            padding: 15px 15px 10px 15px;
+            background: #1a1a1a;
+            border-bottom: 1px solid #333;
+            flex-shrink: 0;
+        }
+        
+        .settings-scroll-area {
+            flex: 1;
+            overflow-y: auto;
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        .settings-scroll-area::-webkit-scrollbar { width: 6px; }
+        .settings-scroll-area::-webkit-scrollbar-thumb { background: #444; border-radius: 3px; }
+
+        .settings-group {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 6px;
+            padding: 10px;
+        }
+        
+        .group-title {
+            font-size: 10px;
+            font-weight: bold;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 8px;
+            padding-bottom: 4px;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+
+        /* Compact Controls inside Settings */
+        .compact-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 6px;
+            font-size: 11px;
+        }
+        .compact-row:last-child { margin-bottom: 0; }
+        .compact-label { font-weight: bold; color: #ccc; }
+        .compact-val { color: #00ffff; font-family: monospace; font-weight: bold; }
+        
+        /* Weapon Grid Row */
+        .weapon-row {
+            display: grid;
+            grid-template-columns: 70px 1fr 35px;
+            gap: 10px;
+            align-items: center;
+            margin-bottom: 4px;
+            background: rgba(0,0,0,0.2);
+            padding: 4px 8px;
+            border-radius: 4px;
+        }
+        .weapon-name { font-size: 10px; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        
+        .custom-range {
+            width: 100%;
+            cursor: pointer;
+            accent-color: #d32f2f;
+            height: 4px;
+            background: #333;
+            border-radius: 2px;
+            outline: none;
+            -webkit-appearance: none;
+        }
+        .custom-range::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 10px;
+            height: 10px;
+            background: #eee;
+            border-radius: 50%;
+            cursor: pointer;
+        }
+
+        .custom-num-input {
+            width: 100%;
+            background: transparent;
+            border: none;
+            border-bottom: 1px solid #444;
+            color: #fff;
+            font-family: monospace;
+            font-size: 11px;
+            text-align: center;
+            outline: none;
+            padding: 0;
+        }
+
+        /* UPGRADED APPLY BUTTON */
+        .btn-apply {
+            width: 100%;
+            padding: 12px;
+            font-weight: 900;
+            text-transform: uppercase;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            margin-bottom: 5px;
+            margin-top: 10px;
+            touch-action: manipulation;
+            font-size: 14px;
+            letter-spacing: 1px;
+            box-shadow: 0 4px 0 rgba(0,0,0,0.3);
+            position: relative;
+            top: 0;
+        }
+
+        .btn-apply:active {
+            top: 4px;
+            box-shadow: 0 0 0 rgba(0,0,0,0.3);
+        }
+
+        .btn-apply.valid {
+            background: linear-gradient(135deg, #43a047, #2e7d32);
+            color: #fff;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+        }
+        .btn-apply.valid:hover {
+            background: linear-gradient(135deg, #66bb6a, #43a047);
+            box-shadow: 0 6px 10px rgba(67, 160, 71, 0.4), 0 4px 0 rgba(0,0,0,0.3);
+        }
+
+        .btn-apply.invalid {
+            background: #333;
+            color: #777;
+            cursor: not-allowed;
+            box-shadow: none;
+        }
+        
+        .control-group { background: rgba(255,255,255,0.03); padding: 12px; border-radius: 6px; margin-bottom: 12px; border: 1px solid rgba(255,255,255,0.05); }
+        .control-group.p1 { border-left: 4px solid #2e7d32; }
+        .control-group.p2 { border-left: 4px solid #c62828; }
+        
+        .key-grid { display: grid; grid-template-columns: 1fr auto; gap: 6px 0; align-items: center; }
+        .key-label { font-size: 10px; color: #888; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; }
+        
         .panel-header { font-size: 12px; font-weight: bold; color: #888; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 15px; text-align: center; border-bottom: 1px solid #333; padding-bottom: 10px; flex-shrink: 0; }
-        .sub-header { font-size: 10px; font-weight: bold; margin: 10px 0 5px 0; border-bottom: 1px solid #333; padding-bottom: 2px; }
-        .key-row { display: flex; justify-content: space-between; align-items: center; margin: 6px 0; font-size: 11px; color: #aaa; font-weight: bold; }
-        .key-btn { background: #111; border: 1px solid #333; color: #fff; padding: 4px 8px; cursor: pointer; font-family: monospace; min-width: 50px; border-radius: 4px; text-align: center; font-size: 11px; }
+        .sub-header { font-size: 10px; font-weight: bold; margin: 0 0 10px 0; padding-bottom: 5px; border-bottom: 1px solid rgba(255,255,255,0.1); }
+        .key-btn { background: #111; border: 1px solid #333; color: #fff; padding: 4px 8px; cursor: pointer; font-family: monospace; min-width: 60px; border-radius: 4px; text-align: center; font-size: 11px; }
+        .key-btn.fire { background: #222; border-color: #555; color: #fff; margin-top: 5px; font-weight: bold; }
         .key-btn.listening { background: #d32f2f; animation: pulse 0.5s infinite; border-color: #fff; }
 
         .mode-btn { width: 300px; padding: 20px; margin: 10px; font-size: 20px; font-weight: bold; cursor: pointer; border: 2px solid #444; background: #222; color: #fff; display: flex; align-items: center; justify-content: space-between; transition: 0.2s; touch-action: manipulation; }
@@ -206,20 +351,60 @@
         .device-icon { font-size: 60px; margin-bottom: 20px; }
         .device-label { font-size: 20px; font-weight: bold; text-transform: uppercase; }
 
-        .settings-scroll-content { flex: 1; overflow-y: auto; padding-right: 5px; display: flex; flex-direction: column; }
-        .settings-scroll-content::-webkit-scrollbar { width: 6px; }
-        .settings-scroll-content::-webkit-scrollbar-thumb { background: #444; border-radius: 3px; }
-        .custom-row { margin-bottom: 12px; flex-shrink: 0; }
-        .custom-label { display: flex; justify-content: space-between; font-weight: bold; margin-bottom: 3px; color: #eee; font-size: 11px; }
-        .input-row { display: flex; align-items: center; gap: 8px; margin-top: 2px; }
-        .custom-range { flex: 1; cursor: pointer; accent-color: #d32f2f; height: 6px; background: #333; border-radius: 3px; outline: none; -webkit-appearance: none; }
-        .custom-num-input { width: 40px; background: #111; border: 1px solid #444; color: #00ffff; font-family: monospace; font-size: 11px; text-align: center; border-radius: 3px; padding: 2px; outline: none; flex-shrink: 0; }
-        .btn-apply { width: 100%; padding: 10px; font-weight: bold; text-transform: uppercase; border: 1px solid transparent; border-radius: 4px; cursor: pointer; transition: 0.2s; flex-shrink: 0; margin-bottom: 5px; margin-top: 10px; touch-action: manipulation; }
-        .btn-apply.valid { background: linear-gradient(to bottom, #2e7d32, #1b5e20); color: #fff; }
-        .btn-apply.invalid { background: #222; color: #555; border-color: #333; cursor: not-allowed; }
+        .cycle-btn { background: #333; border: 1px solid #555; color: #fff; padding: 4px 10px; cursor: pointer; font-size: 11px; border-radius: 4px; min-width: 80px; text-align: center; font-weight: bold; }
+        .cycle-btn:hover { background: #444; border-color: #888; }
         
-        /* Checkbox Style for Swap */
         input[type="checkbox"] { width: 16px; height: 16px; accent-color: #d32f2f; cursor: pointer; }
+
+        /* AI Commentary Box */
+        #aiCommentary {
+            position: absolute;
+            bottom: 12%; 
+            left: 50%;
+            transform: translateX(-50%);
+            width: 80%;
+            text-align: center;
+            color: #ffeb3b;
+            font-size: 18px;
+            font-weight: bold;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.8);
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.5s ease-in-out;
+            z-index: 90;
+            background: linear-gradient(90deg, transparent, rgba(0,0,0,0.7), transparent);
+            padding: 10px 0;
+        }
+        #aiCommentary.show {
+            opacity: 1;
+        }
+
+        /* Sparkle Button for Gemini Features */
+        .sparkle-btn {
+            background: linear-gradient(135deg, #673ab7, #512da8);
+            color: #fff;
+            border: 1px solid #9575cd;
+            box-shadow: 0 0 10px rgba(103, 58, 183, 0.5);
+            text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+        }
+        .sparkle-btn:hover {
+            background: linear-gradient(135deg, #7e57c2, #673ab7);
+            box-shadow: 0 0 15px rgba(103, 58, 183, 0.8);
+        }
+
+        /* Advice Modal */
+        #adviceContent {
+            background: #1a1a1a;
+            padding: 20px;
+            border: 2px solid #673ab7;
+            border-radius: 8px;
+            max-width: 80%;
+            text-align: center;
+            font-size: 16px;
+            color: #eee;
+            margin-bottom: 20px;
+            line-height: 1.5;
+        }
     </style>
 </head>
 <body>
@@ -234,6 +419,7 @@
     <div id="canvasContainer">
         <canvas id="bgCanvas" width="1365" height="780" class="game-layer"></canvas>
         <canvas id="gameCanvas" width="1365" height="780" class="game-layer"></canvas>
+        <div id="aiCommentary"></div> <!-- AI Commentary Box -->
     </div>
     
     <div id="gameMessage" class="game-msg">DRAW!</div>
@@ -241,11 +427,11 @@
     <div id="deviceSelectModal">
         <h1 style="margin-bottom: 40px;">SELECT CONTROL METHOD</h1>
         <div style="display: flex;">
-            <div class="device-option" onclick="selectDevice('pc')">
+            <div class="device-option" onclick="window.selectDevice('pc')">
                 <div class="device-icon">⌨️</div>
                 <div class="device-label">PC / Keyboard</div>
             </div>
-            <div class="device-option" onclick="selectDevice('mobile')">
+            <div class="device-option" onclick="window.selectDevice('mobile')">
                 <div class="device-icon">📱</div>
                 <div class="device-label">Mobile / 2 Players</div>
             </div>
@@ -267,11 +453,11 @@
             </div>
         </div>
         <div class="btn-group">
-            <button class="btn-main btn-start" onclick="showModeSelect()">START MISSION</button>
-            <button class="btn-main btn-guide" onclick="openGuide()">ARMORY</button>
+            <button class="btn-main btn-start" onclick="window.showModeSelect()">START MISSION</button>
+            <button class="btn-main btn-guide" onclick="window.openGuide()">ARMORY</button>
         </div>
         <div style="margin-top: 40px; font-size: 10px; color: #555; font-weight: bold; letter-spacing: 1px; text-transform: uppercase;">
-            [F] Fullscreen | v57.0 Swap Controls & AI Hide
+            [F] Fullscreen | v63.2 Fixed (Mod)
         </div>
     </div>
 
@@ -293,15 +479,21 @@
 
     <div id="modeSelectModal">
         <h2 style="color:#fff; margin-bottom: 20px;">SELECT GAME MODE</h2>
-        <button class="mode-btn pvp" onclick="selectMode('pvp')"><span>2 PLAYER (PvP)</span><div class="mode-desc">Duel with a friend</div></button>
-        <button class="mode-btn pve" onclick="selectMode('pve')"><span>PLAYER vs SMOOTH AI</span><div class="mode-desc">Smart & Fluid Movement</div></button>
-        <button class="menu-btn" style="margin-top:20px; width: 150px;" onclick="closeModeSelect()">BACK</button>
+        <button class="mode-btn pvp" onclick="window.selectMode('pvp')"><span>2 PLAYER (PvP)</span><div class="mode-desc">Duel with a friend</div></button>
+        <button class="mode-btn pve" onclick="window.selectMode('pve')"><span>PLAYER vs MAGIC AI</span><div class="mode-desc">Advanced Aim & Tactics</div></button>
+        <button class="menu-btn" style="margin-top:20px; width: 150px;" onclick="window.closeModeSelect()">BACK</button>
     </div>
 
     <div id="guideModal">
         <h2>WEAPON GUIDE</h2>
         <div class="guide-content"></div>
-        <button class="menu-btn" style="margin-top:20px; width: 150px; background:#333;" onclick="closeGuide()">BACK</button>
+        <button class="menu-btn" style="margin-top:20px; width: 150px; background:#333;" onclick="window.closeGuide()">BACK</button>
+    </div>
+
+    <div id="aiAdviceModal">
+        <h2 style="color: #b39ddb; margin-bottom: 20px;">✨ GENERAL GEMINI SAYS ✨</h2>
+        <div id="adviceContent">Analysing battlefield strategy...</div>
+        <button class="menu-btn" style="margin-top:10px; width: 150px;" onclick="window.closeAdvice()">THANKS!</button>
     </div>
 
     <div id="settingsModal">
@@ -310,31 +502,20 @@
             <div class="pause-panel system">
                 <div class="panel-header">SYSTEM</div>
                 <div style="display:flex; flex-direction:column; gap:8px;">
-                    <button class="menu-btn primary" onclick="closeSettings()">RESUME</button>
-                    <button class="menu-btn" onclick="restartMatch()">RESTART</button>
-                    <button class="menu-btn" onclick="quitToMenu()">EXIT MENU</button>
+                    <button class="menu-btn primary" onclick="window.closeSettings()">RESUME</button>
+                    <!-- REMOVED GEMINI BUTTON -->
+                    <button class="menu-btn" onclick="window.restartMatch()">RESTART</button>
+                    <button class="menu-btn" onclick="window.quitToMenu()">EXIT MENU</button>
                 </div>
             </div>
 
-            <div class="pause-panel settings">
-                <div class="panel-header">MATCH SETTINGS</div>
-                <div class="settings-fixed-content">
-                    <div class="custom-row"><div class="custom-label"><span>Spawn Time</span> <span id="valSpawnTime" class="custom-value">15s</span></div><input type="range" min="1" max="60" value="15" class="custom-range" oninput="updateCustom(this, 'time')"></div>
-                    <div class="custom-row" style="margin-bottom:0;"><div class="custom-label"><span>Max Items</span> <span id="valMaxItems" class="custom-value">5</span></div><input type="range" min="1" max="50" value="5" class="custom-range" oninput="updateCustom(this, 'max')"></div>
-                </div>
-
-                <div class="panel-header" style="margin-top:5px; border-top:none; padding-top:0; font-size:10px; flex-shrink:0;">WEAPON DROP RATES (%)</div>
-                <div class="settings-scroll-content">
-                    <div id="weaponConfigArea"></div>
-                    <div style="margin-top: auto; padding-top: 10px; border-top: 1px solid #333;">
-                        <div id="totalDropRate">TOTAL: 100%</div>
-                        <button id="btnApplyRates" class="btn-apply valid" onclick="applyDropRates()">APPLY CHANGES</button>
-                    </div>
-                </div>
+            <!-- RESTRUCTURED SETTINGS PANEL -->
+            <div class="pause-panel settings" id="mainSettingsPanel">
+                <!-- Content injected by JS -->
             </div>
             
             <div class="pause-panel controls" id="controlsPanelContent">
-                <div class="panel-header">CONTROLS</div>
+                <!-- CONTROLS INJECTED HERE -->
             </div>
         </div>
     </div>
@@ -352,7 +533,7 @@
 
         <div style="display: flex; flex-direction: column; align-items: center; z-index: 2;">
             <div style="font-size: 9px; color:#444; letter-spacing: 2px; font-weight: bold; margin-bottom: 4px;">TACTICAL SYSTEM</div>
-            <button class="tac-btn" onclick="openSettings()">MENU / CONFIG</button>
+            <button class="tac-btn" onclick="window.openSettings()">MENU / CONFIG</button>
         </div>
 
         <div class="player-hud p1-hud">
@@ -369,10 +550,10 @@
 
 <script>
     // --- GLOBAL SETUP ---
+    const apiKey = ""; // API Key provided by runtime
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
     
-    // SETUP BACKGROUND CANVAS FOR VFX
     const bgCanvas = document.getElementById('bgCanvas');
     const bgCtx = bgCanvas.getContext('2d');
 
@@ -381,20 +562,20 @@
     const guideModal = document.getElementById('guideModal');
     const modeModal = document.getElementById('modeSelectModal');
     const deviceModal = document.getElementById('deviceSelectModal');
+    const adviceModal = document.getElementById('aiAdviceModal');
     const msgBox = document.getElementById('gameMessage');
+    const aiCommentaryBox = document.getElementById('aiCommentary');
     
     let gameRunning = false, gamePaused = false, roundEnding = false, roundEndTimer = null;
     let gameMode = 'pvp';
     let isMobile = false; 
     let remapping = null;
     
-    // DUAL JOYSTICK INPUT STATE
     let mobileInput = {
         p1: { x: 0, y: 0, fire: false },
         p2: { x: 0, y: 0, fire: false }
     };
 
-    // MOBILE CONFIG STATE (Updated with swap)
     let mobileSettings = {
         p1: { sensitivity: 1.0, size: 100, swap: false },
         p2: { sensitivity: 1.0, size: 100, swap: false }
@@ -407,14 +588,32 @@
     let gameSettings = { spawnTime: 15, maxItems: 5 }; 
     let shakeAmount = 0;
 
+    // --- AI CONFIGURATION ---
+    const AI_DIFFICULTY = {
+        EASY: { reaction: 45, aimErr: 0.35, moveSpeed: 1.5, bounces: 0 },
+        NORMAL: { reaction: 20, aimErr: 0.08, moveSpeed: 2.2, bounces: 1 },
+        HARD: { reaction: 8, aimErr: 0.02, moveSpeed: 2.5, bounces: 2 },
+        INSANE: { reaction: 0, aimErr: 0.0, moveSpeed: 3.0, bounces: 3 }
+    };
+
+    const AI_PERSONALITY = {
+        BALANCED: { type: 'balanced', label: 'BALANCED' },
+        RUSHER: { type: 'rusher', label: 'RUSHER (AGGRO)' },
+        SNIPER: { type: 'sniper', label: 'SNIPER (CAMP)' },
+        CAMPER: { type: 'camper', label: 'CAMPER (HIDE)' }
+    };
+
+    let aiConfig = {
+        difficulty: 'NORMAL',
+        personality: 'BALANCED'
+    };
+
     let bullets=[], walls=[], particles=[], powerups=[]; 
     let activeLasers = [];
     let mazeGrid = []; 
     const cellSize=65, wallThickness=5;
     let wallPath=new Path2D();
-
-    // VFX ARRAYS
-    let tracks = []; // Vết xích
+    let tracks = [];
 
     const controls = {
         p1: { up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight', shoot: 'KeyK' },
@@ -425,18 +624,100 @@
     
     const WEAPONS = {
         NORMAL: { ammo: 5, color: '#222', cooldown: 15 },
-        LASER: { ammo: 1, color: '#00ffff', cooldown: 90, weight: 12.5, desc: "Bắn xuyên bản đồ." },
-        FRAG: { ammo: 1, color: '#ffaa00', cooldown: 60, weight: 12.5, desc: "Nổ ra 13 mảnh (Chờ 3s)." },
-        GATLING: { ammo: 10, color: '#ff00ff', cooldown: 4, weight: 12.5, desc: "Súng máy nhanh." },
-        TRIPLE: { ammo: 1, color: '#4488ff', cooldown: 60, weight: 12.5, desc: "Shotgun 3 tia." },
-        DEATHRAY: { ammo: 1, color: '#9900ff', cooldown: 180, weight: 12.5, desc: "Quét sạch 180 độ." },
-        SHIELD: { ammo: 1, color: '#ffffff', cooldown: 0, weight: 12.5, desc: "Phản đạn & Chặn Laser (5s)." },
-        MINE: { ammo: 1, color: '#000000', cooldown: 60, weight: 12.5, desc: "Đặt mìn tàng hình (3s)." },
-        MISSILE: { ammo: 1, color: '#ff4400', cooldown: 120, weight: 12.5, desc: "Tìm đường, dội tường." }
+        LASER: { ammo: 1, color: '#00ffff', cooldown: 90, weight: 11, desc: "Bắn xuyên bản đồ." },
+        FRAG: { ammo: 1, color: '#ffaa00', cooldown: 60, weight: 11, desc: "Nổ ra 13 mảnh (Chờ 3s)." },
+        GATLING: { ammo: 10, color: '#ff00ff', cooldown: 4, weight: 11, desc: "Súng máy nhanh." },
+        TRIPLE: { ammo: 1, color: '#4488ff', cooldown: 60, weight: 11, desc: "Shotgun 3 tia." },
+        DEATHRAY: { ammo: 1, color: '#9900ff', cooldown: 180, weight: 11, desc: "Quét sạch 180 độ." },
+        SHIELD: { ammo: 1, color: '#ffffff', cooldown: 0, weight: 11, desc: "Phản đạn & Chặn Laser (5s)." },
+        MINE: { ammo: 1, color: '#000000', cooldown: 60, weight: 11, desc: "Đặt mìn tàng hình (3s)." },
+        MISSILE: { ammo: 1, color: '#ff4400', cooldown: 120, weight: 11, desc: "Tìm đường, dội tường." },
+        FLAME: { ammo: 40, color: '#ff5722', cooldown: 3, weight: 12, desc: "Phun lửa tầm gần." }
     };
 
-    const POWERUP_TYPES = ['LASER', 'FRAG', 'GATLING', 'TRIPLE', 'DEATHRAY', 'SHIELD', 'MINE', 'MISSILE'];
+    const POWERUP_TYPES = ['LASER', 'FRAG', 'GATLING', 'TRIPLE', 'DEATHRAY', 'SHIELD', 'MINE', 'MISSILE', 'FLAME'];
     let pendingWeights = {}; 
+
+    // --- GEMINI API INTEGRATION ---
+    let isGeminiBusy = false;
+
+    async function callGemini(promptText) {
+        if (isGeminiBusy) return null;
+        isGeminiBusy = true;
+        
+        try {
+            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    contents: [{ parts: [{ text: promptText }] }]
+                })
+            });
+
+            if (!response.ok) throw new Error('API Error');
+            const data = await response.json();
+            isGeminiBusy = false;
+            return data.candidates?.[0]?.content?.parts?.[0]?.text;
+        } catch (e) {
+            console.error("Gemini Error:", e);
+            isGeminiBusy = false;
+            return null;
+        }
+    }
+
+    // Feature 1: Commentary
+    async function triggerAICommentary(type, details) {
+        // Only trigger occasionally to avoid spam
+        if (Math.random() > 0.7 && type !== 'start') return;
+
+        let prompt = "";
+        if (type === 'start') {
+            prompt = "You are a hyped esports announcer for a tank battle game. Write a very short (max 10 words) 'Ready Set Go' style intro to start the match.";
+        } else if (type === 'kill') {
+            prompt = `You are a sarcastic esports commentator. ${details.killer} just killed ${details.victim} using ${details.weapon}. Write a very short (max 15 words) funny or snarky comment about this kill.`;
+        } else if (type === 'win') {
+             prompt = `Write a short (max 10 words) epic victory shout for ${details.winner} who just won the tank battle.`;
+        }
+
+        const text = await callGemini(prompt);
+        if (text) showCommentary(text);
+    }
+
+    function showCommentary(text) {
+        aiCommentaryBox.innerText = text.replace(/['"]+/g, ''); // Remove quotes
+        aiCommentaryBox.classList.add('show');
+        setTimeout(() => {
+            aiCommentaryBox.classList.remove('show');
+        }, 4000);
+    }
+
+    // Feature 2: Tactical Advice
+    async function askGeminiAdvice() {
+        const adviceContent = document.getElementById('adviceContent');
+        adviceContent.innerText = "General Gemini is analyzing the battlefield...";
+        adviceModal.style.display = 'flex';
+        
+        // Gather game state
+        let losingPlayer = scores.p1 < scores.p2 ? "Green Player (P1)" : "Red Player (P2)";
+        if (scores.p1 === scores.p2) losingPlayer = "both players";
+        
+        let prompt = `You are a military general advising in a 2D top-down tank shooter maze game. 
+        Current State: Green Player has ${p1.weaponType} with ${p1.ammo} ammo. Red Player has ${p2.weaponType} with ${p2.ammo} ammo.
+        Score: Green ${scores.p1} - ${scores.p2} Red.
+        Give one single, short (max 20 words) tactical tip specifically for ${losingPlayer} to turn the tide. Focus on weapon usage or movement.`;
+
+        const text = await callGemini(prompt);
+        if (text) {
+            adviceContent.innerText = `"${text.trim()}"`;
+        } else {
+            adviceContent.innerText = "Radio silence... (Connection error)";
+        }
+    }
+
+    function closeAdvice() {
+        adviceModal.style.display = 'none';
+    }
+
 
     // --- MATH HELPERS ---
     function dist(x1, y1, x2, y2) { return Math.hypot(x2 - x1, y2 - y1); }
@@ -483,19 +764,14 @@
     class TrackMark {
         constructor(x, y, angle) {
             this.x = x; this.y = y; this.angle = angle;
-            this.life = 300; // 5s
-            this.maxLife = 300;
+            this.life = 300; this.maxLife = 300;
         }
         update() { this.life--; }
         draw(ctx) {
             if (this.life <= 0) return;
-            ctx.save();
-            ctx.translate(this.x, this.y);
-            ctx.rotate(this.angle);
-            ctx.globalAlpha = (this.life / this.maxLife) * 0.3; 
-            ctx.fillStyle = "#000"; // Black tracks
-            ctx.fillRect(-12, -10, 24, 6); 
-            ctx.fillRect(-12, 4, 24, 6);
+            ctx.save(); ctx.translate(this.x, this.y); ctx.rotate(this.angle);
+            ctx.globalAlpha = (this.life / this.maxLife) * 0.3; ctx.fillStyle = "#000"; 
+            ctx.fillRect(-12, -10, 24, 6); ctx.fillRect(-12, 4, 24, 6);
             ctx.restore();
         }
     }
@@ -507,8 +783,7 @@
             let s = (type==='spark') ? Math.random()*3+2 : Math.random()*4;
             if (type === 'debris') s = Math.random() * 2;
             this.vx=Math.cos(a)*s; this.vy=Math.sin(a)*s;
-            this.size = Math.random()*3+1; 
-            this.life=1.0; 
+            this.size = Math.random()*3+1; this.life=1.0; 
             if(type==='beam') { this.decay=0.05; }
             else if(type==='fragment') { this.vx*=1.5; this.vy*=1.5; this.size=3; this.decay=0.015; }
             else if(type==='fire') { this.decay=0.03; }
@@ -576,6 +851,24 @@
             drawItem(ctx, this.type);
             ctx.restore();
         }
+    }
+    
+    // --- DRAW ITEM FUNCTION RESTORED ---
+    function drawItem(ctxToUse, type) {
+        ctxToUse.save(); ctxToUse.shadowColor = WEAPONS[type] ? WEAPONS[type].color : "#fff"; ctxToUse.shadowBlur = 8;
+        switch(type) {
+            case 'GATLING': ctxToUse.strokeStyle = WEAPONS.GATLING.color; ctxToUse.lineWidth = 1.5; ctxToUse.beginPath(); ctxToUse.arc(0,0, 5, 0, Math.PI*2); ctxToUse.stroke(); for(let i=0; i<6; i++) { ctxToUse.save(); ctxToUse.rotate(i * Math.PI/3); ctxToUse.beginPath(); ctxToUse.arc(8, 0, 2.5, 0, Math.PI*2); ctxToUse.stroke(); ctxToUse.restore(); } break;
+            case 'FRAG': ctxToUse.strokeStyle = WEAPONS.FRAG.color; ctxToUse.lineWidth = 2; ctxToUse.beginPath(); ctxToUse.arc(0, 2, 7, 0, Math.PI*2); ctxToUse.stroke(); ctxToUse.lineWidth = 1; ctxToUse.beginPath(); ctxToUse.arc(-6, -6, 3, 0, Math.PI*2); ctxToUse.stroke(); ctxToUse.beginPath(); ctxToUse.arc(6, -6, 3, 0, Math.PI*2); ctxToUse.stroke(); ctxToUse.beginPath(); ctxToUse.arc(0, -9, 2, 0, Math.PI*2); ctxToUse.stroke(); break;
+            case 'LASER': ctxToUse.fillStyle = WEAPONS.LASER.color; ctxToUse.fillRect(-10, -5, 20, 2); ctxToUse.fillRect(-10, 3, 20, 2); ctxToUse.shadowBlur = 15; ctxToUse.shadowColor = "#fff"; ctxToUse.fillRect(-10, -1, 20, 2); break;
+            case 'TRIPLE': ctxToUse.strokeStyle = WEAPONS.TRIPLE.color; ctxToUse.lineWidth = 2; ctxToUse.lineCap = "round"; ctxToUse.beginPath(); ctxToUse.arc(-8, 0, 2, 0, Math.PI*2); ctxToUse.fill(); ctxToUse.beginPath(); ctxToUse.moveTo(-6, 0); ctxToUse.lineTo(10, 0); ctxToUse.stroke(); ctxToUse.beginPath(); ctxToUse.moveTo(-6, 0); ctxToUse.lineTo(8, -6); ctxToUse.stroke(); ctxToUse.beginPath(); ctxToUse.moveTo(-6, 0); ctxToUse.lineTo(8, 6); ctxToUse.stroke(); ctxToUse.beginPath(); ctxToUse.moveTo(12,0); ctxToUse.lineTo(8,-2); ctxToUse.lineTo(8,2); ctxToUse.fill(); break;
+            case 'DEATHRAY': ctxToUse.strokeStyle = WEAPONS.DEATHRAY.color; ctxToUse.lineWidth = 1.5; ctxToUse.beginPath(); ctxToUse.arc(-5, 0, 10, -Math.PI/2, Math.PI/2); ctxToUse.stroke(); ctxToUse.fillStyle = WEAPONS.DEATHRAY.color; ctxToUse.beginPath(); ctxToUse.arc(-5, 0, 3, 0, Math.PI*2); ctxToUse.fill(); ctxToUse.lineWidth = 1; ctxToUse.beginPath(); ctxToUse.arc(-5, 0, 14, -0.8, 0.8); ctxToUse.stroke(); ctxToUse.beginPath(); ctxToUse.arc(-5, 0, 18, -0.6, 0.6); ctxToUse.stroke(); break;
+            case 'MISSILE': ctxToUse.translate(0, 2); ctxToUse.rotate(-Math.PI/4); ctxToUse.strokeStyle = WEAPONS.MISSILE.color; ctxToUse.lineWidth = 1.5; ctxToUse.beginPath(); ctxToUse.moveTo(-4, -6); ctxToUse.lineTo(4, -6); ctxToUse.lineTo(0, -12); ctxToUse.closePath(); ctxToUse.stroke(); ctxToUse.strokeRect(-4, -6, 8, 12); ctxToUse.beginPath(); ctxToUse.moveTo(-4, 4); ctxToUse.lineTo(-8, 8); ctxToUse.lineTo(-4, 6); ctxToUse.stroke(); ctxToUse.beginPath(); ctxToUse.moveTo(4, 4); ctxToUse.lineTo(8, 8); ctxToUse.lineTo(4, 6); ctxToUse.stroke(); ctxToUse.shadowColor = "red"; ctxToUse.strokeStyle = "red"; ctxToUse.beginPath(); ctxToUse.arc(0, -9, 5, 0, Math.PI*2); ctxToUse.stroke(); ctxToUse.beginPath(); ctxToUse.moveTo(0, -16); ctxToUse.lineTo(0, -2); ctxToUse.stroke(); ctxToUse.beginPath(); ctxToUse.moveTo(-7, -9); ctxToUse.lineTo(7, -9); ctxToUse.stroke(); break;
+            case 'MINE': ctxToUse.strokeStyle = WEAPONS.MINE.color; ctxToUse.lineWidth = 2; ctxToUse.beginPath(); ctxToUse.arc(0,0, 7, 0, Math.PI*2); ctxToUse.stroke(); for(let i=0; i<4; i++) { ctxToUse.save(); ctxToUse.rotate(i * Math.PI/2 + Math.PI/4); ctxToUse.beginPath(); ctxToUse.moveTo(7, 0); ctxToUse.lineTo(12, 0); ctxToUse.stroke(); ctxToUse.restore(); } ctxToUse.shadowColor = "red"; ctxToUse.shadowBlur = 10; ctxToUse.fillStyle = "red"; ctxToUse.beginPath(); ctxToUse.arc(0,0, 3, 0, Math.PI*2); ctxToUse.fill(); break;
+            case 'SHIELD': ctxToUse.strokeStyle = WEAPONS.SHIELD.color; ctxToUse.lineWidth = 2; ctxToUse.strokeRect(-6, -2, 12, 6); ctxToUse.strokeRect(-2, -6, 4, 4); ctxToUse.shadowBlur = 15; ctxToUse.lineWidth = 3; ctxToUse.beginPath(); ctxToUse.arc(0,0, 13, 0, Math.PI*2); ctxToUse.stroke(); break;
+            case 'FLAME': ctxToUse.fillStyle = "#ff5722"; ctxToUse.beginPath(); ctxToUse.moveTo(-5, 8); ctxToUse.quadraticCurveTo(0, -15, 5, 8); ctxToUse.fill(); ctxToUse.fillStyle = "#ff9800"; ctxToUse.beginPath(); ctxToUse.arc(0, 5, 3, 0, Math.PI*2); ctxToUse.fill(); break;
+            default: ctxToUse.fillStyle = WEAPONS[type] ? WEAPONS[type].color : "#fff"; ctxToUse.fillRect(-6,-6,12,12); break;
+        }
+        ctxToUse.shadowBlur = 0; ctxToUse.restore();
     }
 
     class LaserBeam {
@@ -651,10 +944,18 @@
                 this.radius = 3; this.life = 240; this.friction = 0.94; 
             } else if (type === 'mine') {
                 this.radius = 4; this.speed = 0; this.life = 3600; this.armingTime = 180; this.vx = 0; this.vy = 0; this.visible = true; 
+            } else if (type === 'flame') {
+                let rndSpeed = 6 + Math.random() * 3;
+                this.vx = Math.cos(angle) * rndSpeed; this.vy = Math.sin(angle) * rndSpeed;
+                this.radius = 3; this.life = 200; this.friction = 0.98; // MODIFIED: Range decreased to 200 (was 250)
+                this.maxLife = 200;
             } else if (type === 'missile') {
                 this.radius = 5; this.speed = 2.0; this.stage2Speed = 3.2; this.life = 600; this.maxLife = 600; 
                 this.angle = angle; this.vx = Math.cos(angle) * this.speed; this.vy = Math.sin(angle) * this.speed;
                 this.smokeTimer = 0; this.lockedTargetColor = null; 
+                this.path = []; // A* path storage
+                this.pathIndex = 0;
+                this.pathUpdateTimer = 0;
             } else { this.vx=Math.cos(angle)*speed; this.vy=Math.sin(angle)*speed; }
             this.dead=false;
         }
@@ -665,30 +966,63 @@
                 if(this.type==='frag') explodeFrag(this.x,this.y,this.color); 
                 if(this.type==='mine' || this.type==='missile') createExplosion(this.x, this.y, this.color); 
             }
+            if (this.type === 'flame') {
+                this.vx *= this.friction; this.vy *= this.friction;
+                this.radius += 0.15; // Fire expands
+                this.x += this.vx; this.y += this.vy;
+                
+                // Ghost Flame: No collision death check against walls
+                
+                // Destroy other bullets logic
+                for(let other of bullets) {
+                     if (other !== this && !other.dead && other.type !== 'flame' && other.type !== 'mine' && other.type !== 'laser') {
+                         if (dist(this.x, this.y, other.x, other.y) < this.radius + other.radius) {
+                             other.dead = true;
+                             createSmoke(other.x, other.y);
+                         }
+                     }
+                }
+                return;
+            }
             if (this.type === 'missile') {
                 this.smokeTimer++;
                 let smokeColor = this.lockedTargetColor ? this.lockedTargetColor : '#444';
                 if (this.smokeTimer > 2) { particles.push(new Particle(this.x - Math.cos(this.angle)*5, this.y - Math.sin(this.angle)*5, 'smoke', smokeColor)); this.smokeTimer = 0; }
-                if (this.maxLife - this.life > 180) { 
+                if (this.maxLife - this.life > 180) { // Delay tracking start by 3 sec (180 frames)
                     this.speed = this.stage2Speed;
-                    let t1 = p1.dead ? 9999 : Math.hypot(this.x-p1.x, this.y-p1.y);
-                    let t2 = p2.dead ? 9999 : Math.hypot(this.x-p2.x, this.y-p2.y);
+                    
                     let target = null;
-                    if (t1 < t2 && t1 !== 9999) target = p1; else if (t2 !== 9999) target = p2;
+                    let minDist = 99999;
+                    const candidates = [p1, p2];
+                    for (let c of candidates) {
+                        if (c.dead) continue;
+                        let d = dist(this.x, this.y, c.x, c.y);
+                        if (d < minDist) { minDist = d; target = c; }
+                    }
+
                     if (target) {
                         this.lockedTargetColor = target.color;
-                        let wp = getBFSPath(this.x, this.y, target.x, target.y);
-                        let targetAngle = this.angle;
-                        if (wp.length > 0) {
-                             let nextX = wp[0].x * cellSize + cellSize/2;
-                             let nextY = wp[0].y * cellSize + cellSize/2;
-                             targetAngle = Math.atan2(nextY - this.y, nextX - this.x);
-                        } else {
-                             targetAngle = Math.atan2(target.y - this.y, target.x - this.x);
+                        if (this.pathUpdateTimer++ % 10 === 0 || this.path.length === 0) {
+                            this.path = getAStarPath(this.x, this.y, target.x, target.y);
+                            this.pathIndex = 0;
                         }
+                        let targetAngle = this.angle;
+                        if (this.path.length > 0) {
+                            let node = this.path[this.pathIndex];
+                            if (node) {
+                                let nextX = node.x * cellSize + cellSize/2;
+                                let nextY = node.y * cellSize + cellSize/2;
+                                targetAngle = Math.atan2(nextY - this.y, nextX - this.x);
+                                if (dist(this.x, this.y, nextX, nextY) < 30) {
+                                    this.pathIndex++;
+                                    if(this.pathIndex >= this.path.length) { this.path = []; }
+                                }
+                            }
+                        } else { targetAngle = Math.atan2(target.y - this.y, target.x - this.x); }
                         let diff = targetAngle - this.angle;
                         while(diff < -Math.PI) diff += Math.PI*2; while(diff > Math.PI) diff -= Math.PI*2;
-                        let turnSpeed = 0.08; this.angle += Math.sign(diff) * Math.min(Math.abs(diff), turnSpeed);
+                        let turnSpeed = 0.15; 
+                        this.angle += Math.sign(diff) * Math.min(Math.abs(diff), turnSpeed);
                     }
                     this.vx = Math.cos(this.angle) * this.speed; this.vy = Math.sin(this.angle) * this.speed;
                 }
@@ -732,6 +1066,14 @@
             ctx.rotate(this.angle); 
             if(this.type === 'mini') { ctx.fillStyle = this.color; ctx.beginPath(); ctx.moveTo(4, 0); ctx.lineTo(-4, -2); ctx.lineTo(-4, 2); ctx.fill(); } 
             else if(this.type === 'frag') { ctx.fillStyle = (Math.floor(this.life/10)%2===0) ? "#fff" : this.color; ctx.beginPath(); ctx.arc(0,0,5,0,Math.PI*2); ctx.fill(); ctx.strokeStyle = "#fff"; ctx.lineWidth=1; ctx.stroke(); } 
+            else if(this.type === 'flame') {
+                let alpha = this.life / this.maxLife;
+                ctx.globalAlpha = alpha;
+                ctx.fillStyle = (this.life > 30) ? '#ffff00' : '#ff5722'; // Yellow to Orange
+                ctx.shadowBlur = 10; ctx.shadowColor = '#ff5722';
+                ctx.beginPath(); ctx.arc(0, 0, this.radius, 0, Math.PI*2); ctx.fill();
+                ctx.shadowBlur = 0;
+            }
             else if(this.type === 'missile') {
                 ctx.fillStyle = "#ccc"; ctx.fillRect(-6, -3, 10, 6); ctx.fillStyle = "red"; ctx.beginPath(); ctx.moveTo(4, -3); ctx.lineTo(10, 0); ctx.lineTo(4, 3); ctx.fill();
                 ctx.fillStyle = this.color; ctx.beginPath(); ctx.moveTo(-6, 0); ctx.lineTo(-10, -5); ctx.lineTo(-2, -3); ctx.fill(); ctx.beginPath(); ctx.moveTo(-6, 0); ctx.lineTo(-10, 5); ctx.lineTo(-2, 3); ctx.fill();
@@ -761,6 +1103,12 @@
             this.currentVx = 0; this.currentVy = 0;
             this.aiPathTimer = 0; this.aiCurrentPath = []; this.aiTargetCell = null;
             this.trackTimer = 0;
+            
+            // AI Specific
+            this.aiMode = 'SEEK'; // 'SEEK', 'AIM_LOCK'
+            this.aiAimLockTimer = 0;
+            this.aiIdealAngle = 0;
+            this.aiReactionCounter = 0;
         }
         setWeapon(type) { this.weaponType = type; this.ammo = WEAPONS[type].ammo; this.maxAmmo = WEAPONS[type].ammo; this.cooldownTimer=0; }
         takeDamage(killer, bullet) {
@@ -777,14 +1125,26 @@
             createExplosion(this.x, this.y, this.color, true);
             if (bullet) bullet.dead = true;
             
+            if(killer && killer !== this) {
+                triggerAICommentary('kill', { killer: killer.name, victim: this.name, weapon: killer.weaponType });
+            }
+            
             if (p1.dead && p2.dead) {
                 if(roundEndTimer) clearTimeout(roundEndTimer); roundEnding = true;
                 msgBox.innerText = "DRAW!"; msgBox.style.color = "#fff"; msgBox.style.display = "block"; setTimeout(resetRound, 2000);
             } else {
                 roundEndTimer = setTimeout(() => {
                     roundEnding = true;
-                    if (p1.dead && !p2.dead) { scores.p2++; msgBox.innerText = "RED WINS!"; msgBox.style.color = "#d32f2f"; }
-                    else if (p2.dead && !p1.dead) { scores.p1++; msgBox.innerText = "GREEN WINS!"; msgBox.style.color = "#4CAF50"; }
+                    if (p1.dead && !p2.dead) { 
+                        scores.p2++; 
+                        msgBox.innerText = "RED WINS!"; msgBox.style.color = "#d32f2f"; 
+                        triggerAICommentary('win', { winner: "Red Player" });
+                    }
+                    else if (p2.dead && !p1.dead) { 
+                        scores.p1++; 
+                        msgBox.innerText = "GREEN WINS!"; msgBox.style.color = "#4CAF50";
+                        triggerAICommentary('win', { winner: "Green Player" });
+                    }
                     document.getElementById('s1').innerText = scores.p1; document.getElementById('s2').innerText = scores.p2;
                     msgBox.style.display = "block"; setTimeout(resetRound, 2000);
                 }, 3000);
@@ -807,21 +1167,14 @@
             // --- MOVEMENT LOGIC ---
             if (!this.isAI) {
                 let spd = 0;
-                // MOBILE CONTROLS (POINTER)
                 if (isMobile) {
                     let input = this.pKey === 'p1' ? mobileInput.p1 : mobileInput.p2;
-                    
                     if (Math.abs(input.x) > 0.1 || Math.abs(input.y) > 0.1) {
                          let targetAngle = Math.atan2(input.y, input.x);
                          let diff = targetAngle - this.angle;
                          while(diff < -Math.PI) diff += Math.PI*2; while(diff > Math.PI) diff -= Math.PI*2;
-                         
                          let sens = mobileSettings[this.pKey].sensitivity;
                          this.angle += Math.sign(diff) * Math.min(Math.abs(diff), 0.1 * sens);
-                         
-                         // --- CHỈNH SỬA TẠI ĐÂY ---
-                         // Gán cứng bằng 2 (Giống hệt PC)
-                         // Bất kể kéo mạnh hay nhẹ, xe đều đi với tốc độ 2
                          spd = 2; 
                     }
                     if (input.fire) this.shoot(walls);
@@ -829,8 +1182,10 @@
                     let c = controls[this.pKey];
                     if(keys[c.left]) this.angle-=0.05; if(keys[c.right]) this.angle+=0.05;
                     if(keys[c.up]) spd=2; else if(keys[c.down]) spd=-2;
+                    
+                    // PC Auto-fire logic
+                    if (keys[c.shoot]) this.shoot(walls);
                 }
-                
                 if(spd!==0) {
                     this.currentVx = Math.cos(this.angle)*spd; this.currentVy = Math.sin(this.angle)*spd;
                     if(!checkWallCollision(this.x + this.currentVx, this.y, this.hitbox)) { this.x += this.currentVx; }
@@ -867,7 +1222,7 @@
 
             let muzzleDist = 20; let tipX = this.x + Math.cos(this.angle) * muzzleDist; let tipY = this.y + Math.sin(this.angle) * muzzleDist;
             let midX = this.x + Math.cos(this.angle) * (muzzleDist/2); let midY = this.y + Math.sin(this.angle) * (muzzleDist/2);
-            let ignoreWallBlock = (this.weaponType === 'DEATHRAY' || this.weaponType === 'LASER');
+            let ignoreWallBlock = (this.weaponType === 'DEATHRAY' || this.weaponType === 'LASER' || this.weaponType === 'FLAME');
             
             if (!ignoreWallBlock) {
                 if(checkWallCollision(tipX, tipY, 2) || checkWallCollision(midX, midY, 2)) {
@@ -888,6 +1243,10 @@
             } else if (this.weaponType === 'MISSILE') {
                 bullets.push(new Bullet(tipX, tipY, this.angle, WEAPONS.MISSILE.color, 'missile', this));
                 this.cooldownTimer = WEAPONS.MISSILE.cooldown;
+            } else if (this.weaponType === 'FLAME') {
+                let spread = (Math.random() - 0.5) * 0.4; // Wide spread
+                bullets.push(new Bullet(tipX, tipY, this.angle + spread, WEAPONS.FLAME.color, 'flame', this));
+                this.cooldownTimer = WEAPONS.FLAME.cooldown;
             } else {
                 let mx=this.x+Math.cos(this.angle)*18, my=this.y+Math.sin(this.angle)*18;
                 if(this.weaponType === 'GATLING') {
@@ -902,7 +1261,6 @@
         }
         draw() {
             if(this.dead) return;
-            // 1. TÊN & THANH ĐẠN
             ctx.fillStyle="#fff"; ctx.font="bold 10px Arial"; ctx.textAlign="center"; ctx.fillText(this.name, this.x, this.y-28);
             if(this.weaponType==='NORMAL' && this.ammo < this.maxAmmo) { 
                 ctx.fillStyle="#444"; ctx.fillRect(this.x-12,this.y-24,24,4); 
@@ -910,26 +1268,22 @@
                 ctx.strokeStyle="#000"; ctx.lineWidth=1; ctx.strokeRect(this.x-12.5,this.y-24.5,25,5);
             }
             ctx.save(); ctx.translate(this.x, this.y); 
-            // 2. SHIELD
             if (this.activeShield) { 
                 ctx.strokeStyle = "#fff"; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(0,0,24,0,Math.PI*2); ctx.stroke(); 
                 ctx.fillStyle = "rgba(255,255,255,0.1)"; ctx.fill();
             }
             ctx.rotate(this.angle);
-            // 3. THÂN XE
             ctx.shadowColor="rgba(0,0,0,0.5)"; ctx.shadowBlur=6; ctx.shadowOffsetY=3;
             ctx.fillStyle = "#222"; ctx.fillRect(-14, -14, 28, 8); ctx.fillStyle = "#111"; for(let i=-12; i<12; i+=4) ctx.fillRect(i, -14, 2, 8);
             ctx.fillStyle = "#222"; ctx.fillRect(-14, 6, 28, 8); ctx.fillStyle = "#111"; for(let i=-12; i<12; i+=4) ctx.fillRect(i, 6, 2, 8);
             ctx.shadowBlur=0; ctx.shadowOffsetY=0; ctx.fillStyle = "#333"; ctx.fillRect(-12, -7, 24, 14); 
             ctx.fillStyle = this.color; ctx.beginPath(); ctx.moveTo(-10, -5); ctx.lineTo(10, -5); ctx.lineTo(12, 0); ctx.lineTo(10, 5); ctx.lineTo(-10, 5); ctx.closePath(); ctx.fill();
-            // 4. NÒNG SÚNG
             let recoil = 0;
             if(this.weaponType === 'NORMAL' && this.reloadTimer < 5) recoil = this.reloadTimer;
             if(this.weaponType === 'GATLING' && this.cooldownTimer > 0) recoil = Math.random() * 2;
             ctx.save(); ctx.translate(-recoil, 0); 
             drawTurret(ctx, this.weaponType, this.color);
             ctx.restore(); 
-            // 5. THÁP PHÁO
             ctx.fillStyle = this.color; ctx.filter = "brightness(80%)"; ctx.beginPath(); ctx.arc(0, 0, 7, 0, Math.PI*2); ctx.fill(); ctx.filter = "none";
             ctx.strokeStyle = "rgba(0,0,0,0.5)"; ctx.lineWidth = 1; ctx.stroke();
             ctx.fillStyle = "rgba(255,255,255,0.3)"; ctx.beginPath(); ctx.arc(3, -2, 2, 0, Math.PI*2); ctx.fill();
@@ -948,61 +1302,448 @@
             case 'MISSILE': ctx.fillStyle = "#222"; ctx.fillRect(0, -6, 10, 12); ctx.fillStyle = "#555"; ctx.fillRect(5, -8, 14, 6); ctx.fillRect(5, 2, 14, 6); ctx.fillStyle = "red"; ctx.beginPath(); ctx.arc(12, -5, 2, 0, Math.PI*2); ctx.arc(12, 5, 2, 0, Math.PI*2); ctx.fill(); break;
             case 'MINE': ctx.fillStyle = "#222"; ctx.fillRect(0, -3, 16, 6); ctx.fillStyle = "#000"; ctx.fillRect(-14, -6, 6, 12); ctx.strokeStyle = "red"; ctx.strokeRect(-14, -6, 6, 12); break;
             case 'SHIELD': ctx.fillStyle = "#222"; ctx.fillRect(0, -3, 20, 6); ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(10, 0, 4, 0, Math.PI*2); ctx.fill(); break;
+            case 'FLAME': ctx.fillStyle = "#222"; ctx.fillRect(0, -5, 14, 10); ctx.fillStyle = "#333"; ctx.fillRect(14, -6, 4, 12); ctx.fillStyle = "#ff5722"; ctx.fillRect(18, -4, 4, 8); ctx.fillStyle = "#ff9800"; ctx.beginPath(); ctx.arc(20, 0, 2, 0, Math.PI*2); ctx.fill(); break;
             case 'NORMAL': default: ctx.fillStyle="#222"; ctx.fillRect(0,-3,24,6); ctx.fillStyle="#111"; ctx.fillRect(22,-4,4,8); ctx.fillStyle="#ccc"; ctx.fillRect(0,-1,10,2); break;
         }
+        ctx.shadowBlur = 0; 
     }
 
-    // --- AI ---
+    // --- STRATEGIC AI SYSTEM (THE MAGIC AIM V3) ---
     function updateAI(ai, opponent) {
         if(ai.dead || opponent.dead) return;
-        let distToOp = Math.hypot(opponent.x - ai.x, opponent.y - ai.y);
+        
+        // 0. CONFIG FETCH
+        const diff = AI_DIFFICULTY[aiConfig.difficulty] || AI_DIFFICULTY.NORMAL;
+        const persona = AI_PERSONALITY[aiConfig.personality] || AI_PERSONALITY.BALANCED;
+
+        // 1. REACTION DELAY (Simulate human lag)
+        ai.aiReactionCounter++;
+        if (ai.aiReactionCounter < diff.reaction) {
+            // SỬA: Thay vì trượt đi tiếp (gây cảm giác đi ngang), AI sẽ khựng lại hoặc đi chậm khi đang suy nghĩ
+            ai.currentVx *= 0.8; 
+            ai.currentVy *= 0.8;
+            
+            if(!checkWallCollision(ai.x + ai.currentVx, ai.y + ai.currentVy, ai.hitbox)) {
+               ai.x += ai.currentVx; ai.y += ai.currentVy;
+            }
+            return;
+        }
+        ai.aiReactionCounter = 0;
+
+        // 2. AIM LOCK STATE
+        if (ai.aiAimLockTimer > 0) {
+            ai.aiAimLockTimer--;
+            // Add Aim Error (Jitter)
+            let error = (Math.random() - 0.5) * diff.aimErr;
+            rotateTowards(ai, ai.aiIdealAngle + error, 0.25); 
+            
+            if (ai.aiAimLockTimer <= 0 || Math.abs(ai.aiIdealAngle - ai.angle) < 0.1) {
+                ai.shoot(walls);
+                ai.aiMode = 'SEEK';
+            }
+            return; 
+        }
+
+        // 3. MAGIC AIM CHECK
+        // If ammo available and gun ready
+        if (ai.ammo > 0 && ai.cooldownTimer <= 0) {
+            // SPECIAL CHECK FOR FLAME (Short Range)
+            if (ai.weaponType === 'FLAME') {
+                // Only shoot if target is close (approx 150px) and visible
+                let d = dist(ai.x, ai.y, opponent.x, opponent.y);
+                if (d < 160 && hasLineOfSight(ai.x, ai.y, opponent.x, opponent.y)) {
+                    // Just aim directly at opponent
+                    ai.aiIdealAngle = Math.atan2(opponent.y - ai.y, opponent.x - ai.x);
+                    ai.aiAimLockTimer = 5;
+                    ai.aiMode = 'AIM_LOCK';
+                    return;
+                }
+                // If not close, don't try to find firing solution, just move closer
+            } else {
+                // Updated: Pass 'ai' itself to check for self-damage
+                let magicAngle = findFiringSolution(ai, opponent, diff.bounces);
+                if (magicAngle !== null) {
+                    ai.aiIdealAngle = magicAngle;
+                    ai.aiAimLockTimer = 15; // Lock duration
+                    ai.aiMode = 'AIM_LOCK';
+                    return;
+                }
+            }
+        }
+
+        // 4. STRATEGIC MOVEMENT
         let moveTarget = {x: opponent.x, y: opponent.y};
-        if (ai.weaponType === 'NORMAL' || ai.ammo <= 1) {
+        let shouldMove = true;
+
+        // -- BEHAVIOR LOGIC --
+        // CAMPER: Only move if ammo low or weapon is normal
+        if (persona.type === 'camper') {
+            if (ai.weaponType !== 'NORMAL' && ai.ammo > 0) {
+                // Find a corner or stay put? For now, stay put if not threatened
+                if (Math.random() < 0.95) shouldMove = false;
+            }
+        }
+        
+        // SNIPER: Keep distance
+        if (persona.type === 'sniper') {
+            let d = dist(ai.x, ai.y, opponent.x, opponent.y);
+            if (d < 400 && ai.ammo > 0 && ai.weaponType !== 'NORMAL') {
+                // Retreat logic? Simple stop for now, maybe back up later
+                // Actually, finding a path AWAY is hard with just A*, let's just hold position
+                // or move to a powerup far away
+            }
+        }
+
+        // POWERUP SEEKING (Universal Priority)
+        // If ammo low or weapon weak, look for powerups
+        if (ai.weaponType === 'NORMAL' || ai.ammo <= 1 || persona.type === 'rusher') {
             let minP = 9999, bestP = null;
             for(let p of powerups) {
                 if(p.active) {
-                    let d = Math.hypot(p.x - ai.x, p.y - ai.y);
-                    if(d < minP && d < distToOp + 100) { minP = d; bestP = p; }
+                    let d = dist(ai.x, ai.y, p.x, p.y);
+                    if(d < minP) { minP = d; bestP = p; }
                 }
             }
-            if (bestP) moveTarget = {x: bestP.x, y: bestP.y};
+            // Rusher grabs powerups on the way, but prioritizes player if close
+            if (bestP) {
+                // If Rusher and player is VERY close, ignore powerup
+                if (persona.type === 'rusher' && dist(ai.x, ai.y, opponent.x, opponent.y) < 200) {
+                    moveTarget = {x: opponent.x, y: opponent.y};
+                } else {
+                    moveTarget = {x: bestP.x, y: bestP.y};
+                }
+            }
         }
-        let targetX = moveTarget.x, targetY = moveTarget.y;
-        let canSeeDirectly = hasLineOfSight(ai.x, ai.y, targetX, targetY);
-        if (!canSeeDirectly) {
-            if (ai.aiPathTimer++ % 30 === 0 || ai.aiCurrentPath.length === 0) { ai.aiCurrentPath = getBFSPath(ai.x, ai.y, targetX, targetY); ai.aiTargetCell = 0; }
+
+        if (!shouldMove) {
+            // Just look at opponent
+            let ang = Math.atan2(opponent.y - ai.y, opponent.x - ai.x);
+            rotateTowards(ai, ang, 0.1);
+            return;
+        }
+
+        // Pathfinding Logic
+        let directVis = hasLineOfSight(ai.x, ai.y, moveTarget.x, moveTarget.y);
+        
+        if (!directVis) {
+            if (ai.aiPathTimer++ % 20 === 0 || ai.aiCurrentPath.length === 0) { 
+                ai.aiCurrentPath = getBFSPath(ai.x, ai.y, moveTarget.x, moveTarget.y); 
+                ai.aiTargetCell = 0; 
+            }
+            
             if (ai.aiCurrentPath.length > 0) {
                 let cell = ai.aiCurrentPath[ai.aiTargetCell];
                 if (cell) {
-                    let nextX = cell.x * cellSize + cellSize/2; let nextY = cell.y * cellSize + cellSize/2;
-                    if (Math.hypot(nextX - ai.x, nextY - ai.y) < 25) { ai.aiTargetCell++; if (ai.aiTargetCell >= ai.aiCurrentPath.length) ai.aiCurrentPath = []; } 
-                    else { targetX = nextX; targetY = nextY; }
+                    let nextX = cell.x * cellSize + cellSize/2; 
+                    let nextY = cell.y * cellSize + cellSize/2;
+                    if (dist(ai.x, ai.y, nextX, nextY) < 30) { 
+                        ai.aiTargetCell++; 
+                        if (ai.aiTargetCell >= ai.aiCurrentPath.length) ai.aiCurrentPath = []; 
+                    } else { 
+                        moveTarget = {x: nextX, y: nextY}; 
+                    }
                 }
             }
-        } else { ai.aiCurrentPath = []; }
+        } else {
+             ai.aiCurrentPath = []; 
+        }
 
-        let dx = targetX - ai.x; let dy = targetY - ai.y;
+        let dx = moveTarget.x - ai.x; 
+        let dy = moveTarget.y - ai.y;
         let moveAngle = Math.atan2(dy, dx);
+        
+        rotateTowards(ai, moveAngle, 0.15); 
+        
         let diffMove = moveAngle - ai.angle;
         while(diffMove < -Math.PI) diffMove += Math.PI*2; while(diffMove > Math.PI) diffMove -= Math.PI*2;
-        ai.angle += Math.sign(diffMove) * 0.15; 
-        let speed = ai.activeShield ? 3.5 : 2.2;
-        if (Math.abs(diffMove) < 1.0) {
-            ai.currentVx = Math.cos(ai.angle) * speed; ai.currentVy = Math.sin(ai.angle) * speed;
+        
+        // SỬA: Giảm góc cho phép di chuyển từ 1.0 (57 độ) xuống 0.5 (28 độ)
+        // Xe tăng sẽ xoay người thẳng hơn rồi mới đi, tránh hiện tượng "drift" ngang
+        if (Math.abs(diffMove) < 0.5) {
+            let speed = (ai.activeShield ? 3.5 : diff.moveSpeed);
+            ai.currentVx = Math.cos(ai.angle) * speed; 
+            ai.currentVy = Math.sin(ai.angle) * speed;
+            
             if(!checkWallCollision(ai.x + ai.currentVx, ai.y, ai.hitbox)) { ai.x += ai.currentVx; }
             if(!checkWallCollision(ai.x, ai.y + ai.currentVy, ai.hitbox)) { ai.y += ai.currentVy; }
             ai.drawTracks();
         }
-        if (!opponent.activeShield && hasLineOfSight(ai.x, ai.y, opponent.x, opponent.y)) {
-            let dist = Math.hypot(opponent.x - ai.x, opponent.y - ai.y);
-            let timeToTarget = dist / 3.0;
-            let predX = opponent.x + opponent.currentVx * timeToTarget; let predY = opponent.y + opponent.currentVy * timeToTarget;
-            let aimAngle = Math.atan2(predY - ai.y, predX - ai.x);
-            let diffAim = aimAngle - ai.angle;
-            while(diffAim < -Math.PI) diffAim += Math.PI*2; while(diffAim > Math.PI) diffAim -= Math.PI*2;
-            ai.angle += Math.sign(diffAim) * 0.2; 
-            if (Math.abs(diffAim) < 0.2) ai.shoot(walls);
+    }
+
+    function findFiringSolution(ai, target, maxBounces) {
+        let distToTarget = dist(ai.x, ai.y, target.x, target.y);
+        let timeToImpact = distToTarget / 3.0; 
+        let predX = target.x + target.currentVx * timeToImpact; 
+        let predY = target.y + target.currentVy * timeToImpact;
+        
+        if (!hasLineOfSight(ai.x, ai.y, predX, predY)) {
+            // Only try bouncing if enabled for difficulty
+            if (maxBounces > 0) {
+                for (let a = 0; a < 360; a += 10) {
+                    let rad = a * (Math.PI / 180);
+                    // UPDATE: Pass 'ai' as the shooter argument
+                    if (simulateBullet(ai.x, ai.y, rad, target, maxBounces, ai)) {
+                        return rad; 
+                    }
+                }
+            }
+        } else {
+            return Math.atan2(predY - ai.y, predX - ai.x);
         }
+        return null;
+    }
+
+    // UPDATE: Added 'shooter' parameter
+    function simulateBullet(startX, startY, angle, target, maxBounces, shooter) {
+        let x = startX, y = startY;
+        let vx = Math.cos(angle) * 3, vy = Math.sin(angle) * 3;
+        let bounces = 0;
+        const steps = 200; 
+
+        for (let i = 0; i < steps; i++) {
+            for(let k=0; k<4; k++) {
+                x += vx; y += vy;
+                
+                // Wall Collision
+                if (checkWallCollision(x, y, 2.5)) {
+                    if (bounces >= maxBounces) return false;
+                    bounces++;
+                    x -= vx; y -= vy;
+                    if (checkWallCollision(x + vx, y, 2.5)) { vx = -vx; } else { vy = -vy; }
+                    x += vx; y += vy; 
+                }
+                
+                // Target Hit Check
+                if (dist(x, y, target.x, target.y) < 20) return true; 
+
+                // NEW: Self-Hit Safety Check
+                // Nếu đạn quay lại gần người bắn (shooter) VÀ (đã nảy tường HOẶC đã bay xa khỏi nòng súng > 35px)
+                if (shooter) {
+                    let dToSelf = dist(x, y, shooter.x, shooter.y);
+                    if (dToSelf < 20 && (bounces > 0 || dist(x, y, startX, startY) > 35)) {
+                        return false; // Nguy hiểm! Đạn sẽ trúng mình -> Hủy góc bắn này
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
+    function rotateTowards(obj, targetAngle, speed) {
+        let diff = targetAngle - obj.angle;
+        while(diff < -Math.PI) diff += Math.PI*2; while(diff > Math.PI) diff -= Math.PI*2;
+        obj.angle += Math.sign(diff) * Math.min(Math.abs(diff), speed);
+    }
+
+    // --- SETTINGS UI LOGIC ---
+    function renderWeaponSettings() {
+        // Reset Weights
+        pendingWeights = {};
+        
+        const mainPanel = document.getElementById('mainSettingsPanel');
+        if (!mainPanel) return; // FIX: Ensure panel exists
+        
+        let html = `
+            <div class="settings-header-fixed">
+                <div class="panel-header" style="margin:0; border:none; padding:0;">MATCH CONFIGURATION</div>
+            </div>
+            
+            <div class="settings-scroll-area">
+                <!-- GROUP 1: GAME RULES -->
+                <div class="settings-group">
+                    <div class="group-title">GAME RULES</div>
+                    <div class="compact-row">
+                        <span class="compact-label">Spawn Interval</span>
+                        <div style="flex:1; margin:0 10px;"><input type="range" min="1" max="60" value="${gameSettings.spawnTime}" class="custom-range" oninput="window.updateCustom(this, 'time')"></div>
+                        <span class="compact-val" id="valSpawnTime">${gameSettings.spawnTime}s</span>
+                    </div>
+                    <div class="compact-row">
+                        <span class="compact-label">Max Items</span>
+                        <div style="flex:1; margin:0 10px;"><input type="range" min="1" max="50" value="${gameSettings.maxItems}" class="custom-range" oninput="window.updateCustom(this, 'max')"></div>
+                        <span class="compact-val" id="valMaxItems">${gameSettings.maxItems}</span>
+                    </div>
+                </div>
+
+                <!-- GROUP 2: AI BRAIN -->
+                <div class="settings-group">
+                    <div class="group-title">MAGIC AI BRAIN</div>
+                    <div class="compact-row">
+                        <span class="compact-label">DIFFICULTY</span>
+                        <div style="text-align:right;">
+                            <button class="cycle-btn" onclick="window.cycleAI('difficulty')">${aiConfig.difficulty}</button>
+                            <div style="font-size:9px; color:#666; margin-top:2px;">${getDiffDesc()}</div>
+                        </div>
+                    </div>
+                    <div class="compact-row" style="margin-top:5px;">
+                        <span class="compact-label">BEHAVIOR</span>
+                        <button class="cycle-btn" onclick="window.cycleAI('personality')">${AI_PERSONALITY[aiConfig.personality].label}</button>
+                    </div>
+                </div>
+
+                <!-- GROUP 3: WEAPON POOL -->
+                <div class="settings-group">
+                    <div class="group-title">WEAPON DROP CHANCE (%)</div>
+                    <div id="weaponListInternal">
+        `;
+
+        // Generate Weapon List
+        let weaponListHtml = "";
+        POWERUP_TYPES.forEach(key => {
+            const w = WEAPONS[key];
+            pendingWeights[key] = w.weight;
+            weaponListHtml += `
+                <div class="weapon-row">
+                    <div class="weapon-name" style="color:${w.color}">${key}</div>
+                    <input type="range" min="0" max="100" value="${w.weight}" class="custom-range" id="slider_${key}" oninput="window.updateCustom(this, 'weaponWeight', '${key}')">
+                    <input type="number" min="0" max="100" value="${w.weight}" class="custom-num-input" id="input_${key}" oninput="window.updateCustom(this, 'weaponWeightInput', '${key}')">
+                </div>
+            `;
+        });
+
+        html += weaponListHtml + `
+                    </div>
+                    <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #333;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
+                            <span style="font-size:10px; font-weight:bold; color:#888;">TOTAL RATE:</span>
+                            <span id="totalDropRate" style="font-size:11px; font-weight:bold;">100%</span>
+                        </div>
+                        <button id="btnApplyRates" class="btn-apply valid" onclick="window.applyDropRates()">APPLY CHANGES</button>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        mainPanel.innerHTML = html;
+        validateTotalDropRate();
+    }
+
+    function cycleAI(type) {
+        const diffKeys = Object.keys(AI_DIFFICULTY);
+        const persKeys = Object.keys(AI_PERSONALITY);
+        
+        if (type === 'difficulty') {
+            let idx = diffKeys.indexOf(aiConfig.difficulty);
+            idx = (idx + 1) % diffKeys.length;
+            aiConfig.difficulty = diffKeys[idx];
+        } else {
+            let idx = persKeys.indexOf(aiConfig.personality);
+            idx = (idx + 1) % persKeys.length;
+            aiConfig.personality = persKeys[idx];
+        }
+        renderWeaponSettings(); // Re-render to update text
+    }
+
+    function getDiffDesc() {
+        switch(aiConfig.difficulty) {
+            case 'EASY': return "Slow, Poor Aim";
+            case 'NORMAL': return "Standard, 1 Bounce";
+            case 'HARD': return "Fast, 2 Bounces";
+            case 'INSANE': return "Cheater Mode";
+            default: return "";
+        }
+    }
+
+    // --- A* ALGORITHM ---
+    function getAStarPath(startX, startY, targetX, targetY) {
+        let cols = Math.floor(canvas.width / cellSize);
+        let rows = Math.floor(canvas.height / cellSize);
+        
+        let startCol = Math.floor(startX / cellSize);
+        let startRow = Math.floor(startY / cellSize);
+        let endCol = Math.floor(targetX / cellSize);
+        let endRow = Math.floor(targetY / cellSize);
+
+        // Safety checks
+        if (startCol < 0 || startCol >= cols || startRow < 0 || startRow >= rows) return [];
+        if (endCol < 0 || endCol >= cols || endRow < 0 || endRow >= rows) return [];
+        if (startCol === endCol && startRow === endRow) return [];
+
+        let startNode = { c: startCol, r: startRow, g: 0, f: 0 };
+        let openSet = [startNode];
+        let cameFrom = {}; // Key: "c,r", Value: {c, r}
+        let gScore = {}; // Key: "c,r", Value: cost
+        
+        let startKey = startCol + "," + startRow;
+        gScore[startKey] = 0;
+
+        // Heuristic function (Euclidean distance)
+        const heuristic = (c1, r1, c2, r2) => {
+            return Math.hypot(c1 - c2, r1 - r2);
+        };
+
+        startNode.f = heuristic(startCol, startRow, endCol, endRow);
+
+        let visitedCount = 0;
+
+        while (openSet.length > 0) {
+            visitedCount++;
+            if (visitedCount > 1000) break; // Emergency break
+
+            // Get node with lowest fScore
+            let currentIdx = 0;
+            for (let i = 1; i < openSet.length; i++) {
+                if (openSet[i].f < openSet[currentIdx].f) currentIdx = i;
+            }
+            let current = openSet[currentIdx];
+
+            // Check if reached target
+            if (current.c === endCol && current.r === endRow) {
+                // Reconstruct path
+                let path = [];
+                let currKey = current.c + "," + current.r;
+                while (cameFrom[currKey]) {
+                    path.push({ x: parseInt(currKey.split(',')[0]), y: parseInt(currKey.split(',')[1]) });
+                    let prev = cameFrom[currKey];
+                    currKey = prev.c + "," + prev.r;
+                }
+                // path.push({ x: startCol, y: startRow }); // Optional: include start
+                return path.reverse();
+            }
+
+            openSet.splice(currentIdx, 1); // Remove current from openSet
+
+            // Get neighbors
+            let idx = current.c + current.r * cols;
+            if (idx < 0 || idx >= mazeGrid.length) continue;
+            let cell = mazeGrid[idx];
+            
+            let neighbors = [];
+            // Check walls: 0:Top, 1:Right, 2:Bottom, 3:Left. 
+            // Note: mazeGrid.w[d] === 0 means NO WALL (passable). 1 means WALL.
+            
+            // Top
+            if (cell.w[0] === 0) neighbors.push({ c: current.c, r: current.r - 1 });
+            // Right
+            if (cell.w[1] === 0) neighbors.push({ c: current.c + 1, r: current.r });
+            // Bottom
+            if (cell.w[2] === 0) neighbors.push({ c: current.c, r: current.r + 1 });
+            // Left
+            if (cell.w[3] === 0) neighbors.push({ c: current.c - 1, r: current.r });
+
+            for (let neighbor of neighbors) {
+                // Bounds check
+                if (neighbor.c < 0 || neighbor.c >= cols || neighbor.r < 0 || neighbor.r >= rows) continue;
+
+                let tentativeG = gScore[current.c + "," + current.r] + 1; // Distance between neighbors is 1 grid unit
+                let neighborKey = neighbor.c + "," + neighbor.r;
+
+                if (gScore[neighborKey] === undefined || tentativeG < gScore[neighborKey]) {
+                    cameFrom[neighborKey] = { c: current.c, r: current.r };
+                    gScore[neighborKey] = tentativeG;
+                    let f = tentativeG + heuristic(neighbor.c, neighbor.r, endCol, endRow);
+                    
+                    // Check if neighbor is in openSet
+                    let inOpen = openSet.find(n => n.c === neighbor.c && n.r === neighbor.r);
+                    if (!inOpen) {
+                        openSet.push({ c: neighbor.c, r: neighbor.r, g: tentativeG, f: f });
+                    } else {
+                        inOpen.g = tentativeG;
+                        inOpen.f = f;
+                    }
+                }
+            }
+        }
+        return []; // No path found
     }
 
     // --- BFS & MAZE ---
@@ -1013,7 +1754,15 @@
         if (sC===eC && sR===eR) return [];
         let queue = [{c: sC, r: sR}], cameFrom = {}; cameFrom[sC+","+sR] = null;
         let found = false;
+        
+        // Safety check bounds
+        if(sC<0||sC>=cols||sR<0||sR>=rows||eC<0||eC>=cols||eR<0||eR>=rows) return [];
+
+        let visitedCount = 0;
         while(queue.length > 0) {
+            visitedCount++;
+            if (visitedCount > 500) break; // Emergency exit
+
             let cur = queue.shift();
             if (cur.c === eC && cur.r === eR) { found = true; break; }
             let idx = cur.c + cur.r * cols;
@@ -1070,7 +1819,7 @@
         let arr=Array.from({length:grid.length},(_,i)=>i); for(let i=arr.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [arr[i],arr[j]]=[arr[j],arr[i]]; }
         p1.startX=grid[arr[0]].i*cellSize+cellSize/2; p1.startY=grid[arr[0]].j*cellSize+cellSize/2;
         p2.startX=grid[arr[1]].i*cellSize+cellSize/2; p2.startY=grid[arr[1]].j*cellSize+cellSize/2;
-        if(gameMode === 'pve') { p2.isAI = true; p2.name = "AI BOT"; } else { p2.isAI = false; p2.name = "P2"; }
+        if(gameMode === 'pve') { p2.isAI = true; p2.name = "MAGIC AI"; } else { p2.isAI = false; p2.name = "P2"; }
         p1.reset(); p2.reset();
         timerSpawnItems = gameSettings.spawnTime * 60; mazeGrid = grid; 
     }
@@ -1100,7 +1849,41 @@
         if (p.cachedAmmo === p.ammo && p.cachedWeapon === p.weaponType) return;
         p.cachedAmmo = p.ammo; p.cachedWeapon = p.weaponType; const bar=document.getElementById(p.uiId); if(!bar) return; 
         while(bar.firstChild) bar.removeChild(bar.firstChild);
-        for(let i=0;i<p.maxAmmo;i++){ const d=document.createElement('div'); d.className='bullet-notch ' + p.weaponType.toLowerCase(); if(i<p.ammo)d.classList.add('filled'); bar.appendChild(d); }
+        
+        // CUSTOM UI FOR FLAME (FUEL BAR)
+        if (p.weaponType === 'FLAME') {
+            const fuelContainer = document.createElement('div');
+            fuelContainer.style.width = '100%';
+            fuelContainer.style.height = '100%';
+            fuelContainer.style.backgroundColor = '#222';
+            fuelContainer.style.border = '1px solid #444';
+            fuelContainer.style.borderRadius = '2px';
+            fuelContainer.style.overflow = 'hidden';
+            fuelContainer.style.position = 'relative';
+
+            const fuelLevel = document.createElement('div');
+            fuelLevel.style.height = '100%';
+            const pct = (p.ammo / p.maxAmmo) * 100;
+            fuelLevel.style.width = pct + '%';
+            fuelLevel.style.background = 'linear-gradient(90deg, #ff9800, #ff5722)';
+            fuelLevel.style.boxShadow = '0 0 10px #ff5722';
+            fuelLevel.style.transition = 'width 0.05s linear';
+            
+            // Optional: Add text "FUEL"
+            const text = document.createElement('div');
+            text.innerText = "FUEL";
+            text.style.position = 'absolute';
+            text.style.top = '50%'; text.style.left = '50%'; text.style.transform = 'translate(-50%, -50%)';
+            text.style.fontSize = '9px'; text.style.color = '#fff'; text.style.fontWeight = 'bold'; text.style.textShadow = '0 0 2px #000';
+            text.style.pointerEvents = 'none';
+
+            fuelContainer.appendChild(fuelLevel);
+            fuelContainer.appendChild(text);
+            bar.appendChild(fuelContainer);
+        } else {
+            // STANDARD AMMO NOTCHES
+            for(let i=0;i<p.maxAmmo;i++){ const d=document.createElement('div'); d.className='bullet-notch ' + p.weaponType.toLowerCase(); if(i<p.ammo)d.classList.add('filled'); bar.appendChild(d); }
+        }
     }
 
     // --- DEVICE SELECTION & AUTO FULLSCREEN ---
@@ -1112,13 +1895,11 @@
         if(isMobile) {
             setupMobileControls();
             
-            // TỰ ĐỘNG FULL MÀN HÌNH KHI CHỌN MOBILE
             const docEl = document.documentElement;
             if (docEl.requestFullscreen) { docEl.requestFullscreen().catch(() => {}); } 
-            else if (docEl.webkitRequestFullscreen) { docEl.webkitRequestFullscreen(); } // iOS Safari cũ/Android
+            else if (docEl.webkitRequestFullscreen) { docEl.webkitRequestFullscreen(); }
             else if (docEl.msRequestFullscreen) { docEl.msRequestFullscreen(); }
             
-            // Cố gắng khóa hướng xoay ngang (Chỉ hoạt động trên Android Chrome/WebApp)
             if (screen.orientation && screen.orientation.lock) {
                 screen.orientation.lock('landscape').catch(err => console.log("Khóa xoay không khả dụng (bỏ qua):", err));
             }
@@ -1135,7 +1916,7 @@
         const knobP2 = document.getElementById('knobP2');
         const btnFireP2 = document.getElementById('btnFireP2');
 
-        const maxDist = 30; // GIẢM maxDist VÌ JOYSTICK ĐÃ NHỎ LẠI
+        const maxDist = 30;
 
         function handleJoystick(e, knob, stateKey) {
             e.preventDefault();
@@ -1203,62 +1984,90 @@
         btnFireP2.addEventListener('pointerleave', (e) => { mobileInput.p2.fire = false; btnFireP2.style.background="rgba(0,0,0,0.05)"; });
     }
 
-    // --- MENU LOGIC (UPDATED) ---
+    // --- MENU LOGIC ---
+    function hideAllMenus() { menu.style.display = 'none'; settingsModal.style.display = 'none'; guideModal.style.display = 'none'; msgBox.style.display = 'none'; modeModal.style.display='none'; adviceModal.style.display = 'none'; }
     function showModeSelect() { hideAllMenus(); modeModal.style.display = 'flex'; }
     function closeModeSelect() { hideAllMenus(); menu.style.display = 'flex'; }
     
     function selectMode(mode) {
         gameMode = mode; 
         
-        // KIỂM TRA & ẨN JOYSTICK PLAYER 2
         const p2Set = document.querySelector('.p2-set');
         const p2NameUI = document.getElementById('p2NameUI');
-
-        // Các phần tử trong Settings có thể chưa tồn tại, cần kiểm tra trước
         const p2Area = document.getElementById('p2ControlArea');
         const p2Header = document.getElementById('p2ControlHeader');
 
         if(gameMode === 'pve') { 
-            // CHẾ ĐỘ VS AI
-            if(p2NameUI) p2NameUI.innerText = "AI BOT"; 
-            
-            // Chỉ ẩn nếu phần tử ĐANG tồn tại (ví dụ: đang mở settings)
+            if(p2NameUI) p2NameUI.innerText = "MAGIC AI"; 
             if(p2Area) p2Area.style.display = "none";
             if(p2Header) p2Header.style.display = "none";
-            
-            // Ẩn cụm điều khiển P2 trên Mobile
             if (p2Set) p2Set.style.display = 'none';
 
         } else { 
-            // CHẾ ĐỘ PVP
             if(p2NameUI) p2NameUI.innerText = "RED PLAYER"; 
-            
             if(p2Area) p2Area.style.display = "block";
             if(p2Header) p2Header.style.display = "block";
-            
-            // Hiện cụm điều khiển P2
             if (p2Set) p2Set.style.display = 'flex';
         }
         
         startGame();
 
-        // Cố gắng khóa màn hình ngang trên Android
         if (isMobile && screen.orientation && screen.orientation.lock) {
             screen.orientation.lock('landscape').catch(e => console.log("Không thể khóa xoay:", e));
         }
     }
     
     function startGame() { 
-        hideAllMenus(); if(animationId) cancelAnimationFrame(animationId); gameRunning = true; gamePaused = false; 
+        hideAllMenus(); 
+        triggerAICommentary('start', {}); // Trigger Gemini at start
+        if(animationId) cancelAnimationFrame(animationId); gameRunning = true; gamePaused = false; 
         scores = {p1:0, p2:0}; document.getElementById('s1').innerText="0"; document.getElementById('s2').innerText="0"; 
         
-        // CHỈ HIỆN JOYSTICK KHI GAME BẮT ĐẦU
         if(isMobile) {
             document.getElementById('mobileControls').style.display = 'block';
         }
 
         resetRound(); loop(); 
     }
+    
+    // --- RESTORED: GUIDE RENDER FUNCTION ---
+    function renderGuideContent() {
+        const container = document.querySelector('.guide-content');
+        if(!container) return;
+        container.innerHTML = '';
+        
+        Object.keys(WEAPONS).forEach(key => {
+            if(key === 'NORMAL') return;
+            const w = WEAPONS[key];
+            
+            const item = document.createElement('div');
+            item.className = 'guide-item';
+            
+            const iconBox = document.createElement('div');
+            iconBox.className = 'guide-icon-box';
+            
+            const cvs = document.createElement('canvas');
+            cvs.width = 50;
+            cvs.height = 50;
+            
+            const ctx = cvs.getContext('2d');
+            ctx.translate(25, 25);
+            ctx.scale(1.5, 1.5);
+            drawItem(ctx, key);
+            
+            iconBox.appendChild(cvs);
+            
+            const textBox = document.createElement('div');
+            textBox.className = 'guide-text';
+            const desc = w.desc ? w.desc : "Vũ khí đặc biệt.";
+            textBox.innerHTML = `<h4 style="color:${w.color}">${key}</h4><p>${desc}</p>`;
+            
+            item.appendChild(iconBox);
+            item.appendChild(textBox);
+            container.appendChild(item);
+        });
+    }
+
     function openGuide() { hideAllMenus(); guideModal.style.display = 'flex'; renderGuideContent(); }
     function closeGuide() { hideAllMenus(); menu.style.display = 'flex'; }
     
@@ -1269,7 +2078,6 @@
         hideAllMenus(); 
         renderWeaponSettings(); 
         
-        // Render Controls tab based on device
         const controlPanel = document.getElementById('controlsPanelContent');
         if (isMobile) {
             renderMobileSettings(controlPanel);
@@ -1283,73 +2091,84 @@
     function renderMobileSettings(container) {
         let html = `
             <div class="panel-header">MOBILE CONFIG</div>
-            
-            <div class="sub-header" style="color:#66bb6a;">PLAYER 1</div>
-            <div class="custom-row">
-                <div class="custom-label">Sensitivity (Turn Speed) <span id="valSensP1">${mobileSettings.p1.sensitivity.toFixed(1)}</span></div>
-                <input type="range" min="0.5" max="3.0" step="0.1" value="${mobileSettings.p1.sensitivity}" class="custom-range" oninput="updateMobileConfig('p1', 'sensitivity', this.value)">
-            </div>
-            <div class="custom-row">
-                <div class="custom-label">Button Size <span id="valSizeP1">${mobileSettings.p1.size}%</span></div>
-                <input type="range" min="50" max="150" step="5" value="${mobileSettings.p1.size}" class="custom-range" oninput="updateMobileConfig('p1', 'size', this.value)">
-            </div>
-            <div class="custom-row">
-                <div class="custom-label">Swap Joystick/Fire</div>
-                <input type="checkbox" ${mobileSettings.p1.swap ? 'checked' : ''} onchange="updateMobileConfig('p1', 'swap', this.checked)">
-            </div>
+            <div style="padding: 0 5px;">
+                <div class="control-group p1">
+                    <div class="sub-header" style="color:#66bb6a; border:none; margin-top:0;">PLAYER 1</div>
+                    <div class="custom-row">
+                        <div class="custom-label">Sensitivity (Turn Speed) <span id="valSensP1">${mobileSettings.p1.sensitivity.toFixed(1)}</span></div>
+                        <input type="range" min="0.5" max="3.0" step="0.1" value="${mobileSettings.p1.sensitivity}" class="custom-range" oninput="window.updateMobileConfig('p1', 'sensitivity', this.value)">
+                    </div>
+                    <div class="custom-row">
+                        <div class="custom-label">Button Size <span id="valSizeP1">${mobileSettings.p1.size}%</span></div>
+                        <input type="range" min="50" max="150" step="5" value="${mobileSettings.p1.size}" class="custom-range" oninput="window.updateMobileConfig('p1', 'size', this.value)">
+                    </div>
+                    <div class="custom-row">
+                        <div class="custom-label">Swap Joystick/Fire</div>
+                        <input type="checkbox" ${mobileSettings.p1.swap ? 'checked' : ''} onchange="window.updateMobileConfig('p1', 'swap', this.checked)">
+                    </div>
+                </div>
         `;
 
-        // Chỉ hiển thị cài đặt P2 nếu KHÔNG phải chế độ PvE (AI)
         if (gameMode !== 'pve') {
             html += `
-                <div class="sub-header" style="color:#ef5350; margin-top:20px;">PLAYER 2</div>
-                <div class="custom-row">
-                    <div class="custom-label">Sensitivity (Turn Speed) <span id="valSensP2">${mobileSettings.p2.sensitivity.toFixed(1)}</span></div>
-                    <input type="range" min="0.5" max="3.0" step="0.1" value="${mobileSettings.p2.sensitivity}" class="custom-range" oninput="updateMobileConfig('p2', 'sensitivity', this.value)">
-                </div>
-                <div class="custom-row">
-                    <div class="custom-label">Button Size <span id="valSizeP2">${mobileSettings.p2.size}%</span></div>
-                    <input type="range" min="50" max="150" step="5" value="${mobileSettings.p2.size}" class="custom-range" oninput="updateMobileConfig('p2', 'size', this.value)">
-                </div>
-                <div class="custom-row">
-                    <div class="custom-label">Swap Joystick/Fire</div>
-                    <input type="checkbox" ${mobileSettings.p2.swap ? 'checked' : ''} onchange="updateMobileConfig('p2', 'swap', this.checked)">
+                <div class="control-group p2">
+                    <div class="sub-header" style="color:#ef5350; border:none; margin-top:0;">PLAYER 2</div>
+                    <div class="custom-row">
+                        <div class="custom-label">Sensitivity (Turn Speed) <span id="valSensP2">${mobileSettings.p2.sensitivity.toFixed(1)}</span></div>
+                        <input type="range" min="0.5" max="3.0" step="0.1" value="${mobileSettings.p2.sensitivity}" class="custom-range" oninput="window.updateMobileConfig('p2', 'sensitivity', this.value)">
+                    </div>
+                    <div class="custom-row">
+                        <div class="custom-label">Button Size <span id="valSizeP2">${mobileSettings.p2.size}%</span></div>
+                        <input type="range" min="50" max="150" step="5" value="${mobileSettings.p2.size}" class="custom-range" oninput="window.updateMobileConfig('p2', 'size', this.value)">
+                    </div>
+                    <div class="custom-row">
+                        <div class="custom-label">Swap Joystick/Fire</div>
+                        <input type="checkbox" ${mobileSettings.p2.swap ? 'checked' : ''} onchange="window.updateMobileConfig('p2', 'swap', this.checked)">
+                    </div>
                 </div>
             `;
         } else {
-            html += `<div style="margin-top:20px; color:#888; font-size:11px; text-align:center;">PLAYER 2 IS AI BOT</div>`;
+            html += `<div class="control-group p2" style="opacity:0.7;"><div class="sub-header" style="color:#ef5350; border:none; margin:0;">PLAYER 2 (AI)</div><div style="font-size:10px; color:#aaa; margin-top:5px;">Controlled by Magic AI</div></div>`;
         }
 
+        html += `</div>`;
         container.innerHTML = html;
     }
 
     function renderPCControls(container) {
         let html = `
-            <div class="panel-header">CONTROLS</div>
-            <div class="sub-header" style="color:#66bb6a;">PLAYER 1</div>
-            <div class="key-row"><span>UP</span> <button class="key-btn" onclick="remap(this, 'p1', 'up')">${controls.p1.up}</button></div>
-            <div class="key-row"><span>DOWN</span> <button class="key-btn" onclick="remap(this, 'p1', 'down')">${controls.p1.down}</button></div>
-            <div class="key-row"><span>LEFT</span> <button class="key-btn" onclick="remap(this, 'p1', 'left')">${controls.p1.left}</button></div>
-            <div class="key-row"><span>RIGHT</span> <button class="key-btn" onclick="remap(this, 'p1', 'right')">${controls.p1.right}</button></div>
-            <div class="key-row"><span>FIRE</span> <button class="key-btn" onclick="remap(this, 'p1', 'shoot')">${controls.p1.shoot}</button></div>
+            <div class="panel-header">CONTROLS CONFIG</div>
+            <div style="padding: 0 5px;">
+                <div class="control-group p1">
+                    <div class="sub-header" style="color:#66bb6a; border:none; margin-top:0;">PLAYER 1 (Green)</div>
+                    <div class="key-grid">
+                        <span class="key-label">Move Up</span> <button class="key-btn" onclick="window.remap(this, 'p1', 'up')">${controls.p1.up}</button>
+                        <span class="key-label">Move Down</span> <button class="key-btn" onclick="window.remap(this, 'p1', 'down')">${controls.p1.down}</button>
+                        <span class="key-label">Move Left</span> <button class="key-btn" onclick="window.remap(this, 'p1', 'left')">${controls.p1.left}</button>
+                        <span class="key-label">Move Right</span> <button class="key-btn" onclick="window.remap(this, 'p1', 'right')">${controls.p1.right}</button>
+                        <div class="key-label" style="color:#fff; margin-top:5px;">FIRE SHOT</div> <button class="key-btn fire" onclick="window.remap(this, 'p1', 'shoot')">${controls.p1.shoot}</button>
+                    </div>
+                </div>
         `;
 
-        // Chỉ hiển thị cài đặt phím cho Player 2 nếu KHÔNG PHẢI là chế độ đấu với AI
         if (gameMode !== 'pve') {
             html += `
-                <div class="sub-header" id="p2ControlHeader" style="color:#ef5350; margin-top: 20px;">PLAYER 2</div>
-                <div id="p2ControlArea">
-                    <div class="key-row"><span>UP</span> <button class="key-btn" onclick="remap(this, 'p2', 'up')">${controls.p2.up}</button></div>
-                    <div class="key-row"><span>DOWN</span> <button class="key-btn" onclick="remap(this, 'p2', 'down')">${controls.p2.down}</button></div>
-                    <div class="key-row"><span>LEFT</span> <button class="key-btn" onclick="remap(this, 'p2', 'left')">${controls.p2.left}</button></div>
-                    <div class="key-row"><span>RIGHT</span> <button class="key-btn" onclick="remap(this, 'p2', 'right')">${controls.p2.right}</button></div>
-                    <div class="key-row"><span>FIRE</span> <button class="key-btn" onclick="remap(this, 'p2', 'shoot')">${controls.p2.shoot}</button></div>
+                <div class="control-group p2">
+                    <div class="sub-header" style="color:#ef5350; border:none; margin-top:0;">PLAYER 2 (Red)</div>
+                    <div class="key-grid">
+                        <span class="key-label">Move Up</span> <button class="key-btn" onclick="window.remap(this, 'p2', 'up')">${controls.p2.up}</button>
+                        <span class="key-label">Move Down</span> <button class="key-btn" onclick="window.remap(this, 'p2', 'down')">${controls.p2.down}</button>
+                        <span class="key-label">Move Left</span> <button class="key-btn" onclick="window.remap(this, 'p2', 'left')">${controls.p2.left}</button>
+                        <span class="key-label">Move Right</span> <button class="key-btn" onclick="window.remap(this, 'p2', 'right')">${controls.p2.right}</button>
+                        <div class="key-label" style="color:#fff; margin-top:5px;">FIRE SHOT</div> <button class="key-btn fire" onclick="window.remap(this, 'p2', 'shoot')">${controls.p2.shoot}</button>
+                    </div>
                 </div>
             `;
         } else {
-            html += `<div style="margin-top:20px; color:#888; font-size:11px; text-align:center;">PLAYER 2 IS AI BOT</div>`;
+            html += `<div class="control-group p2" style="opacity:0.7;"><div class="sub-header" style="color:#ef5350; border:none; margin:0;">PLAYER 2 (AI)</div><div style="font-size:10px; color:#aaa; margin-top:5px;">Controlled by Magic AI</div></div>`;
         }
-
+        
+        html += `</div>`;
         container.innerHTML = html;
     }
 
@@ -1369,7 +2188,6 @@
             } else if (type === 'size') {
                 mobileSettings[player].size = value;
                 document.getElementById(`valSize${player === 'p1' ? 'P1' : 'P2'}`).innerText = value + '%';
-                // Apply scale immediately
                 const scale = value / 100;
                 const setEl = document.querySelector(`.${player}-set`);
                 if(setEl) setEl.style.transform = `scale(${scale})`;
@@ -1383,12 +2201,11 @@
         if(animationId) cancelAnimationFrame(animationId); 
         gameRunning=false; gamePaused=false; 
         hideAllMenus(); 
-        document.getElementById('mobileControls').style.display = 'none'; // ẨN JOYSTICK KHI RA MENU
+        document.getElementById('mobileControls').style.display = 'none'; 
         menu.style.display='flex'; 
         ctx.clearRect(0,0,canvas.width,canvas.height); 
         roundEnding=false; if(roundEndTimer) clearTimeout(roundEndTimer); 
     }
-    function hideAllMenus() { menu.style.display = 'none'; settingsModal.style.display = 'none'; guideModal.style.display = 'none'; msgBox.style.display = 'none'; modeModal.style.display='none'; }
     
     function updateCustom(el, type, weaponKey) {
         let val = parseInt(el.value); if (isNaN(val)) val = 0; if (val < 0) val = 0; if (val > 100) val = 100;
@@ -1405,45 +2222,6 @@
         else { statusDiv.innerText = `TOTAL: ${total}% (MUST BE 100%)`; statusDiv.style.color = "#d32f2f"; btn.classList.remove("valid"); btn.classList.add("invalid"); btn.disabled = true; btn.innerText = "INVALID TOTAL"; }
     }
     function applyDropRates() { POWERUP_TYPES.forEach(key => { WEAPONS[key].weight = pendingWeights[key]; }); document.getElementById('btnApplyRates').innerText = "SAVED!"; }
-    function renderWeaponSettings() {
-        const area = document.getElementById('weaponConfigArea'); area.innerHTML = ''; pendingWeights = {};
-        POWERUP_TYPES.forEach(key => {
-            const w = WEAPONS[key]; pendingWeights[key] = w.weight;
-            const div = document.createElement('div'); div.className = 'custom-row';
-            div.innerHTML = `<div class="custom-label"><span style="color:${w.color}">${key}</span></div><div class="input-row"><input type="range" min="0" max="100" value="${w.weight}" class="custom-range" id="slider_${key}" oninput="updateCustom(this, 'weaponWeight', '${key}')"><input type="number" min="0" max="100" value="${w.weight}" class="custom-num-input" id="input_${key}" oninput="updateCustom(this, 'weaponWeightInput', '${key}')"></div>`;
-            area.appendChild(div);
-        });
-        validateTotalDropRate();
-    }
-    function renderGuideContent() {
-        const container = document.querySelector('.guide-content'); container.innerHTML = ''; 
-        POWERUP_TYPES.forEach(type => {
-            const item = document.createElement('div'); item.className = 'guide-item';
-            const iconBox = document.createElement('div'); iconBox.className = 'guide-icon-box';
-            const cvs = document.createElement('canvas'); cvs.width = 40; cvs.height = 40; 
-            const c = cvs.getContext('2d'); c.translate(20, 20); c.scale(1.0, 1.0); // Fix Scale for Icon
-            drawItem(c, type);
-            iconBox.appendChild(cvs); item.appendChild(iconBox);
-            const textDiv = document.createElement('div'); textDiv.className = 'guide-text';
-            textDiv.innerHTML = `<h4 style="color: ${WEAPONS[type].color}">${type}</h4><p>${WEAPONS[type].desc}</p>`;
-            item.appendChild(textDiv); container.appendChild(item);
-        });
-    }
-    function drawItem(ctxToUse, type) {
-        ctxToUse.save(); ctxToUse.shadowColor = WEAPONS[type] ? WEAPONS[type].color : "#fff"; ctxToUse.shadowBlur = 8;
-        switch(type) {
-            case 'GATLING': ctxToUse.strokeStyle = WEAPONS.GATLING.color; ctxToUse.lineWidth = 1.5; ctxToUse.beginPath(); ctxToUse.arc(0,0, 5, 0, Math.PI*2); ctxToUse.stroke(); for(let i=0; i<6; i++) { ctxToUse.save(); ctxToUse.rotate(i * Math.PI/3); ctxToUse.beginPath(); ctxToUse.arc(8, 0, 2.5, 0, Math.PI*2); ctxToUse.stroke(); ctxToUse.restore(); } break;
-            case 'FRAG': ctxToUse.strokeStyle = WEAPONS.FRAG.color; ctxToUse.lineWidth = 2; ctxToUse.beginPath(); ctxToUse.arc(0, 2, 7, 0, Math.PI*2); ctxToUse.stroke(); ctxToUse.lineWidth = 1; ctxToUse.beginPath(); ctxToUse.arc(-6, -6, 3, 0, Math.PI*2); ctxToUse.stroke(); ctxToUse.beginPath(); ctxToUse.arc(6, -6, 3, 0, Math.PI*2); ctxToUse.stroke(); ctxToUse.beginPath(); ctxToUse.arc(0, -9, 2, 0, Math.PI*2); ctxToUse.stroke(); break;
-            case 'LASER': ctxToUse.fillStyle = WEAPONS.LASER.color; ctxToUse.fillRect(-10, -5, 20, 2); ctxToUse.fillRect(-10, 3, 20, 2); ctxToUse.shadowBlur = 15; ctxToUse.shadowColor = "#fff"; ctxToUse.fillRect(-10, -1, 20, 2); break;
-            case 'TRIPLE': ctxToUse.strokeStyle = WEAPONS.TRIPLE.color; ctxToUse.lineWidth = 2; ctxToUse.lineCap = "round"; ctxToUse.beginPath(); ctxToUse.arc(-8, 0, 2, 0, Math.PI*2); ctxToUse.fill(); ctxToUse.beginPath(); ctxToUse.moveTo(-6, 0); ctxToUse.lineTo(10, 0); ctxToUse.stroke(); ctxToUse.beginPath(); ctxToUse.moveTo(-6, 0); ctxToUse.lineTo(8, -6); ctxToUse.stroke(); ctxToUse.beginPath(); ctxToUse.moveTo(-6, 0); ctxToUse.lineTo(8, 6); ctxToUse.stroke(); ctxToUse.beginPath(); ctxToUse.moveTo(12,0); ctxToUse.lineTo(8,-2); ctxToUse.lineTo(8,2); ctxToUse.fill(); break;
-            case 'DEATHRAY': ctxToUse.strokeStyle = WEAPONS.DEATHRAY.color; ctxToUse.lineWidth = 1.5; ctxToUse.beginPath(); ctxToUse.arc(-5, 0, 10, -Math.PI/2, Math.PI/2); ctxToUse.stroke(); ctxToUse.fillStyle = WEAPONS.DEATHRAY.color; ctxToUse.beginPath(); ctxToUse.arc(-5, 0, 3, 0, Math.PI*2); ctxToUse.fill(); ctxToUse.lineWidth = 1; ctxToUse.beginPath(); ctxToUse.arc(-5, 0, 14, -0.8, 0.8); ctxToUse.stroke(); ctxToUse.beginPath(); ctxToUse.arc(-5, 0, 18, -0.6, 0.6); ctxToUse.stroke(); break;
-            case 'MISSILE': ctxToUse.translate(0, 2); ctxToUse.rotate(-Math.PI/4); ctxToUse.strokeStyle = WEAPONS.MISSILE.color; ctxToUse.lineWidth = 1.5; ctxToUse.beginPath(); ctxToUse.moveTo(-4, -6); ctxToUse.lineTo(4, -6); ctxToUse.lineTo(0, -12); ctxToUse.closePath(); ctxToUse.stroke(); ctxToUse.strokeRect(-4, -6, 8, 12); ctxToUse.beginPath(); ctxToUse.moveTo(-4, 4); ctxToUse.lineTo(-8, 8); ctxToUse.lineTo(-4, 6); ctxToUse.stroke(); ctxToUse.beginPath(); ctxToUse.moveTo(4, 4); ctxToUse.lineTo(8, 8); ctxToUse.lineTo(4, 6); ctxToUse.stroke(); ctxToUse.shadowColor = "red"; ctxToUse.strokeStyle = "red"; ctxToUse.beginPath(); ctxToUse.arc(0, -9, 5, 0, Math.PI*2); ctxToUse.stroke(); ctxToUse.beginPath(); ctxToUse.moveTo(0, -16); ctxToUse.lineTo(0, -2); ctxToUse.stroke(); ctxToUse.beginPath(); ctxToUse.moveTo(-7, -9); ctxToUse.lineTo(7, -9); ctxToUse.stroke(); break;
-            case 'MINE': ctxToUse.strokeStyle = WEAPONS.MINE.color; ctxToUse.lineWidth = 2; ctxToUse.beginPath(); ctxToUse.arc(0,0, 7, 0, Math.PI*2); ctxToUse.stroke(); for(let i=0; i<4; i++) { ctxToUse.save(); ctxToUse.rotate(i * Math.PI/2 + Math.PI/4); ctxToUse.beginPath(); ctxToUse.moveTo(7, 0); ctxToUse.lineTo(12, 0); ctxToUse.stroke(); ctxToUse.restore(); } ctxToUse.shadowColor = "red"; ctxToUse.shadowBlur = 10; ctxToUse.fillStyle = "red"; ctxToUse.beginPath(); ctxToUse.arc(0,0, 3, 0, Math.PI*2); ctxToUse.fill(); break;
-            case 'SHIELD': ctxToUse.strokeStyle = WEAPONS.SHIELD.color; ctxToUse.lineWidth = 2; ctxToUse.strokeRect(-6, -2, 12, 6); ctxToUse.strokeRect(-2, -6, 4, 4); ctxToUse.shadowBlur = 15; ctxToUse.lineWidth = 3; ctxToUse.beginPath(); ctxToUse.arc(0,0, 13, 0, Math.PI*2); ctxToUse.stroke(); break;
-            default: ctxToUse.fillStyle = WEAPONS[type] ? WEAPONS[type].color : "#fff"; ctxToUse.fillRect(-6,-6,12,12); break;
-        }
-        ctxToUse.shadowBlur = 0; ctxToUse.restore();
-    }
     
     function remap(btn, player, action) { if (remapping) return; btn.innerText = "..."; btn.classList.add("listening"); remapping = { btn, player, action }; }
     function toggleFS(){ if(!document.fullscreenElement) document.documentElement.requestFullscreen().catch(()=>{}); else if(document.exitFullscreen) document.exitFullscreen(); }
@@ -1453,11 +2231,8 @@
         msgBox.style.display="none"; roundEnding=false; 
         if(roundEndTimer) clearTimeout(roundEndTimer); 
         p1.activeShield = false; p2.activeShield = false; 
-        
-        // Reset Time-based VFX
         tracks = []; 
-        bgCtx.clearRect(0, 0, canvas.width, canvas.height); // Clear once
-        
+        bgCtx.clearRect(0, 0, canvas.width, canvas.height); 
         generateMaze(); 
     }
     
@@ -1465,13 +2240,9 @@
         animationId = requestAnimationFrame(loop); if(gamePaused) return;
         let dx=0, dy=0; if(shakeAmount>0){ dx=(Math.random()-0.5)*shakeAmount; dy=(Math.random()-0.5)*shakeAmount; shakeAmount*=0.9; if(shakeAmount<0.5)shakeAmount=0; }
         
-        // UPDATE GAME CANVAS
         ctx.save(); ctx.translate(dx,dy); ctx.clearRect(-dx,-dy,canvas.width,canvas.height); ctx.fillStyle="#444"; ctx.fill(wallPath);
         
-        // UPDATE BACKGROUND CANVAS (FOR FADING TRACKS)
-        bgCtx.clearRect(0, 0, canvas.width, canvas.height); // Clear background frame to redraw fading elements
-        
-        // Draw & Update Tracks
+        bgCtx.clearRect(0, 0, canvas.width, canvas.height); 
         for(let i=tracks.length-1; i>=0; i--) {
             let t = tracks[i]; t.update(); t.draw(bgCtx);
             if (t.life <= 0) tracks.splice(i, 1);
@@ -1505,6 +2276,27 @@
         ctx.restore();
     }
     
+
+    // --- EXPOSE FUNCTIONS TO WINDOW SCOPE ---
+    window.selectDevice = selectDevice;
+    window.selectMode = selectMode;
+    window.openGuide = openGuide;
+    window.closeGuide = closeGuide;
+    window.openSettings = openSettings;
+    window.closeSettings = closeSettings;
+    window.restartMatch = restartMatch;
+    window.quitToMenu = quitToMenu;
+    window.updateCustom = updateCustom;
+    window.applyDropRates = applyDropRates;
+    window.showModeSelect = showModeSelect;
+    window.closeModeSelect = closeModeSelect;
+    window.cycleAI = cycleAI;
+    window.remap = remap;
+    window.toggleFS = toggleFS;
+    window.updateMobileConfig = updateMobileConfig;
+    window.askGeminiAdvice = askGeminiAdvice;
+    window.closeAdvice = closeAdvice;
+
     // --- INIT ---
     p1 = new Tank(0,0,"#4CAF50","P1",null,'ammo-p1'); p2 = new Tank(0,0,"#D32F2F","P2",null,'ammo-p2'); 
     
