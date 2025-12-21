@@ -44,10 +44,8 @@ const controls = {
 
 // AI Config
 const AI_DIFFICULTY = {
-    EASY: { reaction: 45, aimErr: 0.35, moveSpeed: 1.5, bounces: 0 },
-    NORMAL: { reaction: 20, aimErr: 0.08, moveSpeed: 2.2, bounces: 1 },
-    HARD: { reaction: 8, aimErr: 0.02, moveSpeed: 2.5, bounces: 2 },
-    INSANE: { reaction: 0, aimErr: 0.0, moveSpeed: 3.0, bounces: 3 }
+    EASY: { reaction: 8, aimErr: 0.02, moveSpeed: 2.5, bounces: 2 },
+    HARD: { reaction: 0, aimErr: 0.0, moveSpeed: 3.0, bounces: 3 }
 };
 
 const AI_PERSONALITY = {
@@ -57,22 +55,54 @@ const AI_PERSONALITY = {
     CAMPER: { type: 'camper', label: 'CAMPER (HIDE)' }
 };
 
-let aiConfig = { difficulty: 'NORMAL', personality: 'BALANCED' };
+let aiConfig = { difficulty: 'EASY', personality: 'BALANCED' };
 
 // Weapons Config
 const RELOAD_TIME = 75;
+
 const WEAPONS = {
-    NORMAL: { ammo: 5, color: '#222', cooldown: 15 },
-    LASER: { ammo: 1, color: '#00ffff', cooldown: 90, weight: 11, desc: "Bắn xuyên bản đồ." },
-    FRAG: { ammo: 1, color: '#ffaa00', cooldown: 60, weight: 11, desc: "Nổ ra 13 mảnh (Chờ 3s)." },
-    GATLING: { ammo: 10, color: '#ff00ff', cooldown: 4, weight: 11, desc: "Súng máy nhanh." },
-    TRIPLE: { ammo: 1, color: '#4488ff', cooldown: 60, weight: 11, desc: "Shotgun 3 tia." },
-    DEATHRAY: { ammo: 1, color: '#9900ff', cooldown: 180, weight: 11, desc: "Quét sạch 180 độ." },
-    SHIELD: { ammo: 1, color: '#ffffff', cooldown: 0, weight: 11, desc: "Phản đạn & Chặn Laser (5s)." },
-    MINE: { ammo: 1, color: '#000000', cooldown: 60, weight: 11, desc: "Đặt mìn tàng hình (3s)." },
-    MISSILE: { ammo: 1, color: '#ff4400', cooldown: 120, weight: 11, desc: "Tìm đường, dội tường." },
-    FLAME: { ammo: 40, color: '#ff5722', cooldown: 3, weight: 12, desc: "Phun lửa tầm gần." }
+    NORMAL: { ammo: 5, color: '#222', cooldown: 15, weight: 0 }, // Mặc định không drop
+
+    // --- HẠNG S (SIÊU HIẾM: 8%) ---
+    // Deathray quá mạnh (quét 180 độ), chỉ nên xuất hiện như một "Jackpot"
+    DEATHRAY: { ammo: 1, color: '#9900ff', cooldown: 180, weight: 5, desc: "CỰC HIẾM: Quét sạch 180 độ." },
+    // Laser bắn xuyên tường, rất khó né nếu vào tay cao thủ
+    LASER: { ammo: 1, color: '#00ffff', cooldown: 90, weight: 3, desc: "Bắn xuyên bản đồ." },
+
+    // --- HẠNG A (CAO CẤP: 17%) ---
+    // Khiên giúp lật kèo khi còn ít máu
+    SHIELD: { ammo: 1, color: '#ffffff', cooldown: 0, weight: 8, desc: "Phản đạn & Chặn Laser (5s)." },
+    // Tên lửa đuổi cần không gian rộng, vẫn có thể né được
+    MISSILE: { ammo: 1, color: '#ff4400', cooldown: 120, weight: 9, desc: "Tìm đường, dội tường." },
+
+    // --- HẠNG B (TIÊU CHUẨN: 40%) ---
+    // Gatling gây áp lực tốt nhưng dễ hết đạn
+    GATLING: { ammo: 10, color: '#ff00ff', cooldown: 4, weight: 12, desc: "Súng máy nhanh." },
+    // Triple kiểm soát không gian tốt
+    TRIPLE: { ammo: 1, color: '#4488ff', cooldown: 60, weight: 14, desc: "Shotgun 3 tia." },
+    // Frag gây hỗn loạn, tốt cho việc spam góc tường
+    FRAG: { ammo: 1, color: '#ffaa00', cooldown: 60, weight: 14, desc: "Nổ ra 13 mảnh (Chờ 3s)." },
+
+    // --- HẠNG C (PHỔ THÔNG: 35%) ---
+    // Mìn ép đối thủ phải nhìn đường, không quá mạnh trực tiếp
+    MINE: { ammo: 1, color: '#000000', cooldown: 60, weight: 15, desc: "Đặt mìn tàng hình (3s)." },
+    // Flame xuất hiện nhiều nhất để ép 2 bên lao vào nhau (cận chiến)
+    FLAME: { ammo: 40, color: '#ff5722', cooldown: 3, weight: 20, desc: "Phun lửa tầm gần." }
 };
+
+// THÊM ĐOẠN NÀY ĐỂ LƯU CẤU HÌNH MẶC ĐỊNH
+const DEFAULT_DROP_RATES = {
+    DEATHRAY: 3,
+    LASER: 5,
+    SHIELD: 8,
+    MISSILE: 9,
+    GATLING: 12,
+    TRIPLE: 14,
+    FRAG: 14,
+    MINE: 15,
+    FLAME: 20
+};
+
 const POWERUP_TYPES = ['LASER', 'FRAG', 'GATLING', 'TRIPLE', 'DEATHRAY', 'SHIELD', 'MINE', 'MISSILE', 'FLAME'];
 let pendingWeights = {}; 
 

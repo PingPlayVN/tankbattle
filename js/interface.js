@@ -18,7 +18,7 @@ function selectMode(mode) {
     const p2Header = document.getElementById('p2ControlHeader');
 
     if(gameMode === 'pve') { 
-        if(p2NameUI) p2NameUI.innerText = "MAGIC AI"; 
+        if(p2NameUI) p2NameUI.innerText = "BOT"; 
         if(p2Area) p2Area.style.display = "none";
         if(p2Header) p2Header.style.display = "none";
         if (p2Set) p2Set.style.display = 'none';
@@ -104,7 +104,26 @@ function renderWeaponSettings() {
         const w = WEAPONS[key]; pendingWeights[key] = w.weight;
         weaponListHtml += `<div class="weapon-row"><div class="weapon-name" style="color:${w.color}">${key}</div><input type="range" min="0" max="100" value="${w.weight}" class="custom-range" id="slider_${key}" oninput="window.updateCustom(this, 'weaponWeight', '${key}')"><input type="number" min="0" max="100" value="${w.weight}" class="custom-num-input" id="input_${key}" oninput="window.updateCustom(this, 'weaponWeightInput', '${key}')"></div>`;
     });
-    html += weaponListHtml + `</div><div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #333;"><div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;"><span style="font-size:10px; font-weight:bold; color:#888;">TOTAL RATE:</span><span id="totalDropRate" style="font-size:11px; font-weight:bold;">100%</span></div><button id="btnApplyRates" class="btn-apply valid" onclick="window.applyDropRates()">APPLY CHANGES</button></div></div></div>`;
+    html += weaponListHtml + `
+        </div>
+        <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #333;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                <span style="font-size:10px; font-weight:bold; color:#888;">TOTAL RATE:</span>
+                <span id="totalDropRate" style="font-size:11px; font-weight:bold;">100%</span>
+            </div>
+            
+            <div style="display:flex; gap: 10px;">
+                <button class="menu-btn" style="flex:1; background:#444; border-color:#666; font-size:12px; padding:12px 0;" onclick="window.resetDropRates()">
+                    ↺ DEFAULT
+                </button>
+                
+                <button id="btnApplyRates" style="flex:2; margin:0;" class="btn-apply valid" onclick="window.applyDropRates()">
+                    APPLY
+                </button>
+            </div>
+        </div>
+    </div></div>`; // Đóng các thẻ div
+    
     mainPanel.innerHTML = html;
     validateTotalDropRate();
 }
@@ -182,10 +201,8 @@ function setupMobileControls() {
 // --- HELPER FUNCTIONS FOR WINDOW EXPORT ---
 function getDiffDesc() {
     switch(aiConfig.difficulty) {
-        case 'EASY': return "Slow, Poor Aim";
-        case 'NORMAL': return "Standard, 1 Bounce";
-        case 'HARD': return "Fast, 2 Bounces";
-        case 'INSANE': return "Cheater Mode";
+        case 'EASY': return "Fast, 2 Bounces";
+        case 'HARD': return "Cheater Mode";
         default: return "";
     }
 }
@@ -230,6 +247,28 @@ window.cycleAI = cycleAI;
 window.remap = remap;
 window.updateMobileConfig = updateMobileConfig;
 window.restartMatch = function() { scores = { p1: 0, p2: 0 }; document.getElementById('s1').innerText="0"; document.getElementById('s2').innerText="0"; closeSettings(); window.startGame(); }
+
+function resetDropRates() {
+    // 1. Duyệt qua danh sách mặc định và khôi phục giá trị
+    Object.keys(DEFAULT_DROP_RATES).forEach(key => {
+        const val = DEFAULT_DROP_RATES[key];
+        
+        // Cập nhật biến tạm
+        pendingWeights[key] = val;
+        
+        // Cập nhật giao diện (Thanh kéo và Ô nhập số)
+        const slider = document.getElementById('slider_' + key);
+        const input = document.getElementById('input_' + key);
+        
+        if (slider) slider.value = val;
+        if (input) input.value = val;
+    });
+
+    // 2. Kiểm tra lại tổng số (để bật đèn xanh cho nút Apply)
+    validateTotalDropRate();
+}
+
+window.resetDropRates = resetDropRates;
 
 // Key Listeners
 window.addEventListener('keydown', e => { 
