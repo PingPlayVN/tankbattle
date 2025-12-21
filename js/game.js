@@ -17,13 +17,13 @@ function calculateBounce(x, y, vx, vy, radius) {
     return { vx, vy, hit: hitX || hitY };
 }
 
-// --- AI SYSTEM (UPDATED) ---
+// --- AI SYSTEM (UPGRADED WITH DODGE) ---
 function updateAI(ai, opponent) {
     if(ai.dead || opponent.dead) return;
     const diff = AI_DIFFICULTY[aiConfig.difficulty] || AI_DIFFICULTY.EASY;
     const persona = AI_PERSONALITY[aiConfig.personality] || AI_PERSONALITY.BALANCED;
 
-    // 1. Reaction Lag (AI phản ứng chậm dựa trên độ khó)
+    // 1. Reaction Lag (Giữ nguyên logic cũ)
     ai.aiReactionCounter++;
     if (ai.aiReactionCounter < diff.reaction) {
         ai.currentVx *= 0.8; ai.currentVy *= 0.8;
@@ -34,105 +34,198 @@ function updateAI(ai, opponent) {
     }
     ai.aiReactionCounter = 0;
 
-    // 2. Aim Lock (Khi đã tìm thấy góc bắn, AI sẽ xoay từ từ để nhắm)
-    if (ai.aiAimLockTimer > 0) {
-        ai.aiAimLockTimer--;
-        // Thêm chút sai số tự nhiên để AI không bắn trúng 100% (giống người hơn)
-        let error = (Math.random() - 0.5) * diff.aimErr;
-        rotateTowards(ai, ai.aiIdealAngle + error, 0.25); 
+    // --- NEW: DODGE LOGIC (Ưu tiên cao nhất) ---
+    // Kiểm tra xem có cần né đạn không
+    let dodgeMove = getDodgeVector(ai, bullets, walls);
+    let isDodging = false;
+    let moveTarget = {x: opponent.x, y: opponent.y}; // Mặc định nhắm tới đối thủ
+
+    // Nếu phát hiện nguy hiểm, ghi đè hướng di chuyển
+    if (dodgeMove.active) {
+        // Tính góc né
+        let dodgeAngle = Math.atan2(dodgeMove.y, dodgeMove.x);
+        // AI sẽ ưu tiên né, bỏ qua việc đứng yên ngắm bắn
+        ai.aiMode = 'DODGE';
+        isDodging = true;
         
-        // Nếu góc xoay đã chuẩn -> BẮN!
-        if (ai.aiAimLockTimer <= 0 || Math.abs(ai.aiIdealAngle - ai.angle) < 0.1) { 
-            ai.shoot(walls); 
-            ai.aiMode = 'SEEK'; 
-        }
-        return; 
-    }
-
-    // 3. Tính toán đường đạn (Magic Aim Calculation)
-    if (ai.ammo > 0 && ai.cooldownTimer <= 0) {
-        if (ai.weaponType === 'FLAME') {
-            // Súng lửa chỉ bắn gần
-            let d = dist(ai.x, ai.y, opponent.x, opponent.y);
-            if (d < 160 && hasLineOfSight(ai.x, ai.y, opponent.x, opponent.y)) {
-                ai.aiIdealAngle = Math.atan2(opponent.y - ai.y, opponent.x - ai.x);
-                ai.aiAimLockTimer = 5; ai.aiMode = 'AIM_LOCK'; return;
-            }
-        } else {
-            // Súng thường: Dùng thuật toán Raycasting tìm đường đạn nảy
-            let magicAngle = findFiringSolution(ai, opponent, diff.bounces);
-            if (magicAngle !== null) { 
-                ai.aiIdealAngle = magicAngle; 
-                ai.aiAimLockTimer = 15; // Thời gian delay để xoay nòng súng
-                ai.aiMode = 'AIM_LOCK'; 
-                return; 
-            }
-        }
-    }
-
-    // 4. Logic Di chuyển (Movement Logic)
-    let moveTarget = {x: opponent.x, y: opponent.y};
-    let shouldMove = true;
-    
-    // Nếu là Camper và đang có súng xịn -> Đứng im rình
-    if (persona.type === 'camper' && ai.weaponType !== 'NORMAL' && ai.ammo > 0 && Math.random() < 0.95) shouldMove = false;
-    
-    // Nếu hết đạn hoặc là Rusher -> Đi tìm vũ khí hoặc lao vào địch
-    if (ai.weaponType === 'NORMAL' || ai.ammo <= 1 || persona.type === 'rusher') {
-        let minP = 9999, bestP = null;
-        for(let p of powerups) { 
-            if(p.active) { 
-                let d = dist(ai.x, ai.y, p.x, p.y); 
-                if(d < minP) { minP = d; bestP = p; } 
-            } 
-        }
-        if (bestP) {
-            if (persona.type === 'rusher' && dist(ai.x, ai.y, opponent.x, opponent.y) < 200) moveTarget = {x: opponent.x, y: opponent.y};
-            else moveTarget = {x: bestP.x, y: bestP.y};
-        }
-    }
-
-    if (!shouldMove) {
-        let ang = Math.atan2(opponent.y - ai.y, opponent.x - ai.x);
-        rotateTowards(ai, ang, 0.1); return;
-    }
-
-    // Tìm đường (Pathfinding)
-    let directVis = hasLineOfSight(ai.x, ai.y, moveTarget.x, moveTarget.y);
-    if (!directVis) {
-        // Nếu không nhìn thấy đích, dùng BFS để tìm đường
-        if (ai.aiPathTimer++ % 20 === 0 || ai.aiCurrentPath.length === 0) { 
-            ai.aiCurrentPath = getBFSPath(ai.x, ai.y, moveTarget.x, moveTarget.y); 
-            ai.aiTargetCell = 0; 
-        }
-        if (ai.aiCurrentPath.length > 0) {
-            let cell = ai.aiCurrentPath[ai.aiTargetCell];
-            if (cell) {
-                let nextX = cell.x * cellSize + cellSize/2; 
-                let nextY = cell.y * cellSize + cellSize/2;
-                if (dist(ai.x, ai.y, nextX, nextY) < 30) { 
-                    ai.aiTargetCell++; 
-                    if (ai.aiTargetCell >= ai.aiCurrentPath.length) ai.aiCurrentPath = []; 
-                } 
-                else { moveTarget = {x: nextX, y: nextY}; }
-            }
-        }
-    } else ai.aiCurrentPath = []; 
-
-    // Di chuyển thực tế
-    let dx = moveTarget.x - ai.x; let dy = moveTarget.y - ai.y;
-    let moveAngle = Math.atan2(dy, dx);
-    rotateTowards(ai, moveAngle, 0.15); 
-    let diffMove = moveAngle - ai.angle;
-    while(diffMove < -Math.PI) diffMove += Math.PI*2; while(diffMove > Math.PI) diffMove -= Math.PI*2;
-    
-    if (Math.abs(diffMove) < 0.5) {
-        let speed = (ai.activeShield ? 3.5 : diff.moveSpeed);
-        ai.currentVx = Math.cos(ai.angle) * speed; ai.currentVy = Math.sin(ai.angle) * speed;
-        if(!checkWallCollision(ai.x + ai.currentVx, ai.y, ai.hitbox)) { ai.x += ai.currentVx; }
-        if(!checkWallCollision(ai.x, ai.y + ai.currentVy, ai.hitbox)) { ai.y += ai.currentVy; }
+        // Thực hiện di chuyển né ngay lập tức
+        rotateTowards(ai, dodgeAngle, 0.3); // Xoay nhanh hơn khi né
+        let speed = (ai.activeShield ? 3.5 : diff.moveSpeed) * 1.2; // Tăng tốc nhẹ khi né
+        ai.currentVx = Math.cos(ai.angle) * speed; 
+        ai.currentVy = Math.sin(ai.angle) * speed;
+        
+        // Check va chạm tường khi né (quan trọng để không né đạn mà đâm đầu vào tường)
+        let canMoveX = !checkWallCollision(ai.x + ai.currentVx, ai.y, ai.hitbox);
+        let canMoveY = !checkWallCollision(ai.x, ai.y + ai.currentVy, ai.hitbox);
+        
+        if(canMoveX) ai.x += ai.currentVx;
+        if(canMoveY) ai.y += ai.currentVy;
         ai.drawTracks();
+        
+        // Khi đang né gấp, giảm khả năng bắn chuẩn (để cân bằng game)
+        if (Math.random() < 0.8) return; 
     }
+    // ------------------------------------------
+
+    // 2. Aim Lock (Logic ngắm bắn cũ - Chỉ chạy khi KHÔNG né đạn quá gắt)
+    if (!isDodging) {
+        if (ai.aiAimLockTimer > 0) {
+            ai.aiAimLockTimer--;
+            let error = (Math.random() - 0.5) * diff.aimErr;
+            rotateTowards(ai, ai.aiIdealAngle + error, 0.25); 
+            if (ai.aiAimLockTimer <= 0 || Math.abs(ai.aiIdealAngle - ai.angle) < 0.1) { 
+                ai.shoot(walls); 
+                ai.aiMode = 'SEEK'; 
+            }
+            return; 
+        }
+
+        // 3. Tính toán đường đạn
+        if (ai.ammo > 0 && ai.cooldownTimer <= 0) {
+            if (ai.weaponType === 'FLAME') {
+                let d = dist(ai.x, ai.y, opponent.x, opponent.y);
+                if (d < 160 && hasLineOfSight(ai.x, ai.y, opponent.x, opponent.y)) {
+                    ai.aiIdealAngle = Math.atan2(opponent.y - ai.y, opponent.x - ai.x);
+                    ai.aiAimLockTimer = 5; ai.aiMode = 'AIM_LOCK'; return;
+                }
+            } else {
+                let magicAngle = findFiringSolution(ai, opponent, diff.bounces);
+                if (magicAngle !== null) { 
+                    ai.aiIdealAngle = magicAngle; 
+                    ai.aiAimLockTimer = 15; 
+                    ai.aiMode = 'AIM_LOCK'; 
+                    return; 
+                }
+            }
+        }
+    }
+
+    // 4. Logic Di chuyển (Chỉ chạy khi KHÔNG phải né đạn)
+    if (!isDodging) {
+        let shouldMove = true;
+        
+        // Logic chọn mục tiêu di chuyển (như cũ)
+        if (persona.type === 'camper' && ai.weaponType !== 'NORMAL' && ai.ammo > 0 && Math.random() < 0.95) shouldMove = false;
+        
+        if (ai.weaponType === 'NORMAL' || ai.ammo <= 1 || persona.type === 'rusher') {
+            let minP = 9999, bestP = null;
+            for(let p of powerups) { 
+                if(p.active) { 
+                    let d = dist(ai.x, ai.y, p.x, p.y); 
+                    if(d < minP) { minP = d; bestP = p; } 
+                } 
+            }
+            if (bestP) {
+                if (persona.type === 'rusher' && dist(ai.x, ai.y, opponent.x, opponent.y) < 200) moveTarget = {x: opponent.x, y: opponent.y};
+                else moveTarget = {x: bestP.x, y: bestP.y};
+            }
+        }
+
+        if (!shouldMove) {
+            let ang = Math.atan2(opponent.y - ai.y, opponent.x - ai.x);
+            rotateTowards(ai, ang, 0.1); return;
+        }
+
+        // Pathfinding (như cũ)
+        let directVis = hasLineOfSight(ai.x, ai.y, moveTarget.x, moveTarget.y);
+        if (!directVis) {
+            if (ai.aiPathTimer++ % 20 === 0 || ai.aiCurrentPath.length === 0) { 
+                ai.aiCurrentPath = getBFSPath(ai.x, ai.y, moveTarget.x, moveTarget.y); 
+                ai.aiTargetCell = 0; 
+            }
+            if (ai.aiCurrentPath.length > 0) {
+                let cell = ai.aiCurrentPath[ai.aiTargetCell];
+                if (cell) {
+                    let nextX = cell.x * cellSize + cellSize/2; 
+                    let nextY = cell.y * cellSize + cellSize/2;
+                    if (dist(ai.x, ai.y, nextX, nextY) < 30) { 
+                        ai.aiTargetCell++; 
+                        if (ai.aiTargetCell >= ai.aiCurrentPath.length) ai.aiCurrentPath = []; 
+                    } 
+                    else { moveTarget = {x: nextX, y: nextY}; }
+                }
+            }
+        } else ai.aiCurrentPath = []; 
+
+        // Di chuyển bình thường
+        let dx = moveTarget.x - ai.x; let dy = moveTarget.y - ai.y;
+        let moveAngle = Math.atan2(dy, dx);
+        rotateTowards(ai, moveAngle, 0.15); 
+        
+        // Fix góc xoay để di chuyển mượt hơn
+        let diffMove = moveAngle - ai.angle;
+        while(diffMove < -Math.PI) diffMove += Math.PI*2; while(diffMove > Math.PI) diffMove -= Math.PI*2;
+        
+        if (Math.abs(diffMove) < 0.5) {
+            let speed = (ai.activeShield ? 3.5 : diff.moveSpeed);
+            ai.currentVx = Math.cos(ai.angle) * speed; ai.currentVy = Math.sin(ai.angle) * speed;
+            if(!checkWallCollision(ai.x + ai.currentVx, ai.y, ai.hitbox)) { ai.x += ai.currentVx; }
+            if(!checkWallCollision(ai.x, ai.y + ai.currentVy, ai.hitbox)) { ai.y += ai.currentVy; }
+            ai.drawTracks();
+        }
+    }
+}
+
+// --- NEW HELPER: TÍNH TOÁN HƯỚNG NÉ (Dodge Logic) ---
+function getDodgeVector(ai, bullets, walls) {
+    let dodgeX = 0;
+    let dodgeY = 0;
+    let dangerCount = 0;
+    const detectionRadius = 180; // Tầm nhìn phát hiện đạn
+    const panicRadius = 60;      // Tầm cực nguy hiểm
+
+    for (let b of bullets) {
+        if (b.dead || b.owner === ai) continue; // Bỏ qua đạn của chính mình hoặc đạn đã nổ
+        if (b.type === 'mine' && b.visible === false) continue; // Không né được mìn tàng hình
+
+        // Tính khoảng cách tới đạn
+        let distToBullet = dist(ai.x, ai.y, b.x, b.y);
+
+        if (distToBullet < detectionRadius) {
+            // Dự đoán vị trí đạn sẽ tới trong tương lai gần (để xem nó có lao vào mình không)
+            // Lấy vector vận tốc đạn
+            let bVx = b.vx || 0;
+            let bVy = b.vy || 0;
+            
+            // Vector từ đạn tới AI
+            let toAIX = ai.x - b.x;
+            let toAIY = ai.y - b.y;
+
+            // Tính Dot Product để xem đạn có đang bay về phía AI không
+            // Nếu dot > 0 nghĩa là góc giữa hướng đạn và hướng tới AI là nhọn -> Đang bay lại gần
+            let dot = bVx * toAIX + bVy * toAIY;
+
+            // Nếu đạn quá gần (panic) hoặc đang bay về phía mình
+            if (distToBullet < panicRadius || dot > 0) {
+                // Tạo lực đẩy: Di chuyển vuông góc với đường đạn là cách né tốt nhất
+                // Tuy nhiên đơn giản nhất là di chuyển ra xa khỏi vị trí tương lai của đạn
+                
+                // Trọng số né: Càng gần càng ưu tiên né mạnh
+                let weight = (detectionRadius - distToBullet) / detectionRadius;
+                
+                // Cộng dồn vector né (hướng ngược lại với đạn)
+                // Normalizing vector from bullet to AI
+                let len = Math.hypot(toAIX, toAIY);
+                if (len > 0) {
+                    dodgeX += (toAIX / len) * weight * 10; // *10 để lực né mạnh hơn lực đi thường
+                    dodgeY += (toAIY / len) * weight * 10;
+                }
+                
+                // Logic bổ sung: Né mìn (tĩnh)
+                if (b.type === 'mine' && distToBullet < 80) {
+                    dodgeX += (toAIX / len) * 20;
+                    dodgeY += (toAIY / len) * 20;
+                }
+                
+                dangerCount++;
+            }
+        }
+    }
+
+    if (dangerCount > 0) {
+        return { x: dodgeX, y: dodgeY, active: true };
+    }
+    return { x: 0, y: 0, active: false };
 }
 
 /**
