@@ -169,6 +169,13 @@ class Bullet {
             this.vx = Math.cos(angle) * rndSpeed; this.vy = Math.sin(angle) * rndSpeed;
             this.radius = 3; this.life = 200; this.friction = 0.98;
             this.maxLife = 200;
+        } else if (type === 'drill') {
+            this.radius = 4; 
+            this.speed = 4.0; 
+            this.life = 600; 
+            this.bouncesLeft = 5; // Số lần phá tường tối đa
+            this.vx = Math.cos(angle) * this.speed; 
+            this.vy = Math.sin(angle) * this.speed;
         } else if (type === 'missile') {
             this.radius = 5; this.speed = 2.0; this.stage2Speed = 3.2; this.life = 600; this.maxLife = 600; 
             this.angle = angle; this.vx = Math.cos(angle) * this.speed; this.vy = Math.sin(angle) * this.speed;
@@ -243,12 +250,55 @@ class Bullet {
             return; 
         }
         if(this.type === 'fragment') { this.vx *= this.friction; this.vy *= this.friction; if(Math.abs(this.vx) < 0.05 && Math.abs(this.vy) < 0.05) { this.vx = 0; this.vy = 0; } }
-        let steps = (this.type==='frag') ? 5 : 8; let svx=this.vx/steps; let svy=this.vy/steps;
+        let steps = (this.type==='frag' || this.type==='drill') ? 5 : 8; 
+        let svx=this.vx/steps; let svy=this.vy/steps;
+        
         if(this.vx === 0 && this.vy === 0 && this.type === 'fragment') return;
+
         for(let k=0; k<steps; k++){
             this.x+=svx; this.y+=svy;
-            if(checkWallCollision(this.x, this.y, this.radius)) {
+            
+            // LOGIC XỬ LÝ VA CHẠM TƯỜNG MỚI
+            let hitWallIndex = -1;
+            // Kiểm tra va chạm và lấy Index của tường bị bắn
+            for(let i=0; i<walls.length; i++) {
+                let w = walls[i];
+                if(circleRectCollide(this.x, this.y, this.radius, w.x, w.y, w.w, w.h)) {
+                    hitWallIndex = i;
+                    break;
+                }
+            }
+
+            if(hitWallIndex !== -1) {
                 createHitEffect(this.x, this.y, this.color);
+                
+                // --- XỬ LÝ ĐẶC BIỆT CHO DRILL ---
+                if (this.type === 'drill') {
+                    // 1. Tính toán hướng nảy TRƯỚC khi phá tường (để nảy đúng hướng)
+                    this.x -= svx; this.y -= svy; // Lùi lại 1 bước nhỏ
+                    if (checkWallCollision(this.x + svx, this.y, this.radius)) { 
+                        this.vx = -this.vx; svx = -svx; 
+                    } else { 
+                        this.vy = -this.vy; svy = -svy; 
+                    }
+                    this.angle = Math.atan2(this.vy, this.vx);
+
+                    // 2. Gọi hàm phá tường
+                    if (window.destroyWall) window.destroyWall(hitWallIndex);
+                    
+                    // 3. Trừ số lần nảy
+                    this.bouncesLeft--;
+                    if (this.bouncesLeft <= 0) {
+                        this.dead = true;
+                        createExplosion(this.x, this.y, this.color);
+                    }
+                    
+                    // Break loop bước hiện tại để tránh lỗi tính toán sau khi tường biến mất
+                    break; 
+                }
+                // --- KẾT THÚC LOGIC DRILL ---
+
+                // Logic va chạm cho các đạn thường khác (giữ nguyên logic cũ)
                 if(this.type === 'missile' || this.type === 'frag') {
                     this.x -= svx; this.y -= svy;
                     if (checkWallCollision(this.x + svx, this.y, this.radius)) { this.vx = -this.vx; svx = -svx; }
@@ -256,6 +306,7 @@ class Bullet {
                     this.angle = Math.atan2(this.vy, this.vx);
                     return; 
                 }
+                
                 this.x -= svx; this.y -= svy;
                 if (checkWallCollision(this.x + svx, this.y, this.radius)) { this.vx = -this.vx; svx = -svx; }
                 else { this.vy = -this.vy; svy = -svy; }
@@ -286,6 +337,14 @@ class Bullet {
             ctx.fillStyle = "#ffaa00"; ctx.beginPath(); ctx.moveTo(-6, 0); ctx.lineTo(-12, -2); ctx.lineTo(-12, 2); ctx.fill();
             if (this.maxLife - this.life > 180) ctx.fillStyle = "red"; else ctx.fillStyle = "#00ff00"; ctx.beginPath(); ctx.arc(0, 0, 2, 0, Math.PI*2); ctx.fill();
         } 
+        else if(this.type === 'drill') {
+            ctx.fillStyle = this.color;
+            // Vẽ mũi khoan xoắn
+            ctx.beginPath(); ctx.moveTo(6, 0); ctx.lineTo(-6, -4); ctx.lineTo(-6, 4); ctx.fill();
+            ctx.strokeStyle = "#333"; ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(-4, -3); ctx.lineTo(-2, 3); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(0, -2); ctx.lineTo(2, 2); ctx.stroke();
+        }
         else if(this.type === 'fragment') { ctx.fillStyle = this.color; ctx.beginPath(); ctx.moveTo(6, 0); ctx.lineTo(-4, -4); ctx.lineTo(-4, 4); ctx.fill(); } 
         else if (this.type === 'mine') { if (Math.floor(this.armingTime / 10) % 2 === 0) { ctx.fillStyle = "red"; } else { ctx.fillStyle = "#222"; } ctx.fillRect(-6,-6,12,12); ctx.strokeStyle="red"; ctx.lineWidth=1; ctx.strokeRect(-6,-6,12,12); } 
         else { ctx.shadowBlur = 6; ctx.shadowColor = this.color; ctx.fillStyle = this.color; ctx.beginPath(); ctx.arc(0,0,4,0,Math.PI*2); ctx.fill(); ctx.shadowBlur = 0; }
@@ -421,10 +480,6 @@ class Tank {
             if(p.active && Math.hypot(this.x-p.x, this.y-p.y)<20) {
                 if (this.weaponType !== 'NORMAL') continue;
                 if (p.type === 'SHIELD') { this.activeShield = false; }
-                
-                // [UPDATE] ÂM THANH NHẶT ĐỒ
-                if (typeof playSound === 'function') playSound('powerup', 1.0);
-
                 p.active = false; this.setWeapon(p.type); createHitEffect(this.x,this.y);
             }
         }
@@ -478,6 +533,9 @@ class Tank {
             let spread = (Math.random() - 0.5) * 0.4; 
             bullets.push(new Bullet(tipX, tipY, this.angle + spread, WEAPONS.FLAME.color, 'flame', this));
             this.cooldownTimer = WEAPONS.FLAME.cooldown;
+        } else if (this.weaponType === 'DRILL') {
+             bullets.push(new Bullet(tipX, tipY, this.angle, WEAPONS.DRILL.color, 'drill', this));
+             this.cooldownTimer = WEAPONS.DRILL.cooldown;
         } else {
             let mx=this.x+Math.cos(this.angle)*18, my=this.y+Math.sin(this.angle)*18;
             if(this.weaponType === 'GATLING') {
@@ -487,18 +545,7 @@ class Tank {
             } else {
                 bullets.push(new Bullet(mx,my,this.angle,this.color, 'normal', this)); this.cooldownTimer = WEAPONS.NORMAL.cooldown;
             }
-        }
-        
-        // [UPDATE] ÂM THANH BẮN THÔNG MINH
-        // Chọn âm thanh dựa trên loại súng
-        if (typeof playSound === 'function') {
-            let sfxName = 'shoot'; 
-            if (this.weaponType === 'LASER') sfxName = 'laser';
-            else if (this.weaponType === 'DEATHRAY') sfxName = 'deathray';
-            
-            playSound(sfxName, 0.6);
-        }
-
+        }  
         if (this.weaponType !== 'DEATHRAY') this.ammo--;
     }
     draw() {
@@ -547,6 +594,17 @@ function drawTurret(ctx, type, color) {
         case 'SHIELD': ctx.fillStyle = "#222"; ctx.fillRect(0, -3, 20, 6); ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(10, 0, 4, 0, Math.PI*2); ctx.fill(); break;
         case 'FLAME': ctx.fillStyle = "#222"; ctx.fillRect(0, -5, 14, 10); ctx.fillStyle = "#333"; ctx.fillRect(14, -6, 4, 12); ctx.fillStyle = "#ff5722"; ctx.fillRect(18, -4, 4, 8); ctx.fillStyle = "#ff9800"; ctx.beginPath(); ctx.arc(20, 0, 2, 0, Math.PI*2); ctx.fill(); break;
         case 'NORMAL': default: ctx.fillStyle="#222"; ctx.fillRect(0,-3,24,6); ctx.fillStyle="#111"; ctx.fillRect(22,-4,4,8); ctx.fillStyle="#ccc"; ctx.fillRect(0,-1,10,2); break;
+        case 'DRILL': 
+            ctx.fillStyle = "#222"; ctx.fillRect(0, -6, 12, 12); 
+            ctx.fillStyle = WEAPONS.DRILL.color; 
+            // Vẽ mũi khoan nhiều tầng
+            ctx.beginPath(); ctx.moveTo(12, -5); ctx.lineTo(24, 0); ctx.lineTo(12, 5); ctx.fill();
+            ctx.beginPath(); ctx.moveTo(12, -5); ctx.lineTo(8, -5); ctx.lineTo(8, 5); ctx.lineTo(12, 5); ctx.fill();
+            // Các đường ren xoắn
+            ctx.strokeStyle = "#444"; ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(14, -3); ctx.lineTo(14, 3); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(18, -2); ctx.lineTo(18, 2); ctx.stroke();
+            break;
     }
     ctx.shadowBlur = 0; 
 }
@@ -563,6 +621,14 @@ function drawItem(ctxToUse, type) {
         case 'MINE': ctxToUse.strokeStyle = WEAPONS.MINE.color; ctxToUse.lineWidth = 2; ctxToUse.beginPath(); ctxToUse.arc(0,0, 7, 0, Math.PI*2); ctxToUse.stroke(); for(let i=0; i<4; i++) { ctxToUse.save(); ctxToUse.rotate(i * Math.PI/2 + Math.PI/4); ctxToUse.beginPath(); ctxToUse.moveTo(7, 0); ctxToUse.lineTo(12, 0); ctxToUse.stroke(); ctxToUse.restore(); } ctxToUse.shadowColor = "red"; ctxToUse.shadowBlur = 10; ctxToUse.fillStyle = "red"; ctxToUse.beginPath(); ctxToUse.arc(0,0, 3, 0, Math.PI*2); ctxToUse.fill(); break;
         case 'SHIELD': ctxToUse.strokeStyle = WEAPONS.SHIELD.color; ctxToUse.lineWidth = 2; ctxToUse.strokeRect(-6, -2, 12, 6); ctxToUse.strokeRect(-2, -6, 4, 4); ctxToUse.shadowBlur = 15; ctxToUse.lineWidth = 3; ctxToUse.beginPath(); ctxToUse.arc(0,0, 13, 0, Math.PI*2); ctxToUse.stroke(); break;
         case 'FLAME': ctxToUse.fillStyle = "#ff5722"; ctxToUse.beginPath(); ctxToUse.moveTo(-5, 8); ctxToUse.quadraticCurveTo(0, -15, 5, 8); ctxToUse.fill(); ctxToUse.fillStyle = "#ff9800"; ctxToUse.beginPath(); ctxToUse.arc(0, 5, 3, 0, Math.PI*2); ctxToUse.fill(); break;
+	case 'DRILL':
+            ctxToUse.fillStyle = WEAPONS.DRILL.color;
+            ctxToUse.beginPath(); ctxToUse.moveTo(-8, -6); ctxToUse.lineTo(10, 0); ctxToUse.lineTo(-8, 6); ctxToUse.fill();
+            ctxToUse.strokeStyle = "#fff"; ctxToUse.lineWidth = 2;
+            ctxToUse.beginPath(); ctxToUse.moveTo(-4, -4); ctxToUse.lineTo(-4, 4); ctxToUse.stroke();
+            ctxToUse.beginPath(); ctxToUse.moveTo(0, -3); ctxToUse.lineTo(0, 3); ctxToUse.stroke();
+            ctxToUse.beginPath(); ctxToUse.moveTo(4, -1); ctxToUse.lineTo(4, 1); ctxToUse.stroke();
+            break;
         default: ctxToUse.fillStyle = WEAPONS[type] ? WEAPONS[type].color : "#fff"; ctxToUse.fillRect(-6,-6,12,12); break;
     }
     ctxToUse.shadowBlur = 0; ctxToUse.restore();

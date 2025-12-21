@@ -61,42 +61,43 @@ let aiConfig = { difficulty: 'EASY', personality: 'BALANCED' };
 const RELOAD_TIME = 75;
 
 const WEAPONS = {
-    NORMAL: { ammo: 5, color: '#222', cooldown: 15, weight: 0 }, 
-    DEATHRAY: { ammo: 1, color: '#9900ff', cooldown: 180, weight: 5, desc: "CỰC HIẾM: Quét sạch 180 độ." },
-    LASER: { ammo: 1, color: '#00ffff', cooldown: 90, weight: 3, desc: "Bắn xuyên bản đồ." },
-    SHIELD: { ammo: 1, color: '#ffffff', cooldown: 0, weight: 8, desc: "Phản đạn & Chặn Laser (5s)." },
-    MISSILE: { ammo: 1, color: '#ff4400', cooldown: 120, weight: 9, desc: "Tìm đường, dội tường." },
-    GATLING: { ammo: 10, color: '#ff00ff', cooldown: 4, weight: 12, desc: "Súng máy nhanh." },
-    TRIPLE: { ammo: 1, color: '#4488ff', cooldown: 60, weight: 14, desc: "Shotgun 3 tia." },
-    FRAG: { ammo: 1, color: '#ffaa00', cooldown: 60, weight: 14, desc: "Nổ ra 13 mảnh (Chờ 3s)." },
-    MINE: { ammo: 1, color: '#000000', cooldown: 60, weight: 15, desc: "Đặt mìn tàng hình (3s)." },
-    FLAME: { ammo: 40, color: '#ff5722', cooldown: 3, weight: 20, desc: "Phun lửa tầm gần." }
+    NORMAL:   { ammo: 5,  color: '#222',    cooldown: 15,  weight: 0 }, 
+    
+    // --- TIER S: CỰC HIẾM (Game Enders) ---
+    DEATHRAY: { ammo: 1,  color: '#9900ff', cooldown: 180, weight: 3,  desc: "CỰC HIẾM: Quét sạch 180 độ." },
+    LASER:    { ammo: 1,  color: '#00ffff', cooldown: 90,  weight: 5,  desc: "Bắn xuyên bản đồ." },
+    SHIELD:   { ammo: 1,  color: '#ffffff', cooldown: 0,   weight: 8,  desc: "Phản đạn & Chặn Laser (5s)." },
+    
+    // --- TIER A: CHIẾN THUẬT (Tactical) ---
+    MISSILE:  { ammo: 1,  color: '#ff4400', cooldown: 120, weight: 8,  desc: "Tìm đường, dội tường." },
+    DRILL:    { ammo: 3,  color: '#ffc107', cooldown: 45,  weight: 10, desc: "Mũi Khoan: Phá 5 lớp tường & Nảy." },
+    
+    // --- TIER B: GIAO TRANH (Combat) ---
+    GATLING:  { ammo: 10, color: '#ff00ff', cooldown: 4,   weight: 12, desc: "Súng máy nhanh." },
+    TRIPLE:   { ammo: 1,  color: '#4488ff', cooldown: 60,  weight: 12, desc: "Shotgun 3 tia." },
+    FLAME:    { ammo: 40, color: '#ff5722', cooldown: 3,   weight: 12, desc: "Phun lửa tầm gần." },
+    
+    // --- TIER C: PHỔ THÔNG (Common) ---
+    FRAG:     { ammo: 1,  color: '#ffaa00', cooldown: 60,  weight: 15, desc: "Nổ ra 13 mảnh (Chờ 3s)." },
+    MINE:     { ammo: 1,  color: '#000000', cooldown: 60,  weight: 15, desc: "Đặt mìn tàng hình (3s)." }
 };
 
+// Tổng cộng: 3+5+8+8+10+12+12+12+15+15 = 100%
 const DEFAULT_DROP_RATES = {
-    DEATHRAY: 3, LASER: 5, SHIELD: 8, MISSILE: 9, GATLING: 12, TRIPLE: 14, FRAG: 14, MINE: 15, FLAME: 20
+    DEATHRAY: 3, 
+    LASER: 5, 
+    SHIELD: 8, 
+    MISSILE: 8, 
+    DRILL: 10, 
+    GATLING: 12, 
+    TRIPLE: 12, 
+    FLAME: 12, 
+    FRAG: 15, 
+    MINE: 15
 };
 
-const POWERUP_TYPES = ['LASER', 'FRAG', 'GATLING', 'TRIPLE', 'DEATHRAY', 'SHIELD', 'MINE', 'MISSILE', 'FLAME'];
+const POWERUP_TYPES = ['LASER', 'FRAG', 'GATLING', 'TRIPLE', 'DEATHRAY', 'SHIELD', 'MINE', 'MISSILE', 'FLAME', 'DRILL'];
 let pendingWeights = {}; 
-
-// [UPDATE] HỆ THỐNG ÂM THANH
-// Đảm bảo tên file trong thư mục sounds khớp với tên ở đây
-const SOUND_ASSETS = {
-    shoot: 'sounds/shoot.mp3',       // Tiếng đạn thường
-    explode: 'sounds/explosion.mp3', // Tiếng nổ
-    powerup: 'sounds/collect.mp3',   // Tiếng ăn đồ
-    laser: 'sounds/laser.mp3',       // Tiếng súng Laser (MỚI)
-    deathray: 'sounds/death_ray.mp3' // Tiếng súng Deathray (MỚI)
-};
-
-function playSound(name, volume = 1.0) {
-    if (!SOUND_ASSETS[name]) return;
-    const sfx = new Audio(SOUND_ASSETS[name]);
-    sfx.volume = volume;
-    // Xử lý lỗi nếu trình duyệt chặn tự động phát
-    sfx.play().catch(e => { /* Bỏ qua lỗi console nếu chưa tương tác */ });
-}
 
 // --- MATH & UTILS HELPERS ---
 function dist(x1, y1, x2, y2) { return Math.hypot(x2 - x1, y2 - y1); }

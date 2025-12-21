@@ -322,9 +322,6 @@ function createHitEffect(x, y, color = '#fff') {
 function createSparks(x,y,c,n) { for(let i=0;i<n;i++) particles.push(new Particle(x,y,'spark',c)); }
 
 function createExplosion(x,y,c, big=false) { 
-    // [UPDATE] ÂM THANH NỔ
-    if (typeof playSound === 'function') playSound('explode', big ? 1.0 : 0.7);
-
     shakeAmount=35; particles.push(new Particle(x,y,'flash','#fff')); let count = big ? 20 : 10;
     for(let i=0; i<count; i++) particles.push(new Particle(x,y,'fire','#ffaa00')); for(let i=0; i<3; i++) particles.push(new Particle(x,y,'smoke','#888')); 
 }
@@ -394,3 +391,41 @@ window.startGame = function() {
 // INITIALIZATION
 p1 = new Tank(0,0,"#4CAF50","P1",null,'ammo-p1'); 
 p2 = new Tank(0,0,"#D32F2F","P2",null,'ammo-p2');
+
+// --- HELPER: PHÁ TƯỜNG (CHO ĐẠN DRILL) ---
+function destroyWall(index) {
+    if (index > -1 && index < walls.length) {
+        let w = walls[index];
+
+        // === [ĐOẠN MỚI THÊM VÀO] ===
+        // Kiểm tra xem tường có phải là Biên Giới (Border) không?
+        // Nếu tọa độ x, y quá sát lề trái/trên HOẶC vượt quá lề phải/dưới -> Dừng lại, không phá.
+        if (w.x < 5 || w.y < 5 || w.x + w.w > canvas.width - 5 || w.y + w.h > canvas.height - 5) {
+            // (Tuỳ chọn) Tạo tia lửa kim loại để báo hiệu va vào tường cứng
+            createSparks(w.x + w.w/2, w.y + w.h/2, "#aaa", 5); 
+            return; // KHÔNG PHÁ, THOÁT HÀM NGAY
+        }
+        // === [HẾT ĐOẠN THÊM] ===
+
+        // 1. Tạo hiệu ứng vỡ gạch tại vị trí tường
+        let cx = w.x + w.w/2;
+        let cy = w.y + w.h/2;
+        
+        // Tạo bụi và mảnh vỡ
+        for(let k=0; k<8; k++) {
+            particles.push(new Particle(cx + (Math.random()-0.5)*w.w, cy + (Math.random()-0.5)*w.h, 'debris', '#555'));
+        }
+        createSmoke(cx, cy);
+
+        // 2. Xóa tường khỏi mảng
+        walls.splice(index, 1);
+
+        // 3. Cập nhật lại hình ảnh mê cung (wallPath)
+        wallPath = new Path2D();
+        for(let w of walls) {
+            wallPath.rect(w.x, w.y, w.w, w.h);
+        }
+    }
+}
+// Xuất hàm này ra window để class Bullet có thể gọi
+window.destroyWall = destroyWall;
