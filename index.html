@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>WindHouse - Tank Battle (v65.0 - Modular)</title>
+    <title>WindHouse - Tank Battle (Night Ops)</title>
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -36,33 +36,45 @@
         </div>
     </div>
 
+    <div id="mapSelectModal">
+        <h2 style="color:#fff; margin-bottom: 20px;">SELECT BATTLEFIELD</h2>
+        <div style="display: flex; gap: 20px; flex-wrap: wrap; justify-content: center;">
+            <div class="map-card day" onclick="window.selectMap('day')">
+                <div class="map-icon">☀️</div>
+                <div class="map-title">DAYLIGHT</div>
+                <div class="map-desc">Standard visibility.<br>Classic warfare.</div>
+            </div>
+            <div class="map-card night" onclick="window.selectMap('night')">
+                <div class="map-icon">🔦</div>
+                <div class="map-title">NIGHT OPS</div>
+                <div class="map-desc">Pitch black darkness.<br>Flashlights required.</div>
+            </div>
+        </div>
+        <button class="menu-btn" style="margin-top:20px; width: 150px;" onclick="window.closeMapSelect()">BACK</button>
+    </div>
+
     <div id="menuOverlay">
         <div class="main-title-box"><span class="title-prefix">WindHouse</span><h1 class="game-title">Tank Battle</h1></div>
-    <div class="controls-container">
-    <div class="player-card-ui p1">
-        <div class="p-label">PLAYER 1</div>
-        
-        <canvas id="previewP1" width="140" height="140" class="tank-preview"></canvas>
-        
-        <div class="ctrl-row">Move <span class="key-cap">↑</span><span class="key-cap">↓</span><span class="key-cap">←</span><span class="key-cap">→</span></div>
-        <div class="ctrl-row">Fire <span class="key-cap" style="min-width:60px;">K</span></div>
-    </div>
-    
-    <div class="player-card-ui p2">
-        <div class="p-label">PLAYER 2</div>
-        
-        <canvas id="previewP2" width="140" height="140" class="tank-preview"></canvas>
-
-        <div class="ctrl-row">Move <span class="key-cap">E</span><span class="key-cap">D</span><span class="key-cap">S</span><span class="key-cap">F</span></div>
-        <div class="ctrl-row">Fire <span class="key-cap" style="min-width:60px;">Q</span></div>
-    </div>
-</div>
+        <div class="controls-container">
+            <div class="player-card-ui p1">
+                <div class="p-label">PLAYER 1</div>
+                <canvas id="previewP1" width="140" height="140" class="tank-preview"></canvas>
+                <div class="ctrl-row">Move <span class="key-cap">↑</span><span class="key-cap">↓</span><span class="key-cap">←</span><span class="key-cap">→</span></div>
+                <div class="ctrl-row">Fire <span class="key-cap" style="min-width:60px;">K</span></div>
+            </div>
+            <div class="player-card-ui p2">
+                <div class="p-label">PLAYER 2</div>
+                <canvas id="previewP2" width="140" height="140" class="tank-preview"></canvas>
+                <div class="ctrl-row">Move <span class="key-cap">E</span><span class="key-cap">D</span><span class="key-cap">S</span><span class="key-cap">F</span></div>
+                <div class="ctrl-row">Fire <span class="key-cap" style="min-width:60px;">Q</span></div>
+            </div>
+        </div>
         <div class="btn-group">
             <button class="btn-main btn-start" onclick="window.showModeSelect()">START MISSION</button>
             <button class="btn-main btn-guide" onclick="window.openGuide()">ARMORY</button>
         </div>
         <div style="margin-top: 40px; font-size: 10px; color: #555; font-weight: bold; letter-spacing: 1px; text-transform: uppercase;">
-            [F] Fullscreen | v65.0 (Modular)
+            [F] Fullscreen | v66.0 (Night Ops)
         </div>
     </div>
 
