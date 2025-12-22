@@ -382,6 +382,7 @@ function loop() {
 
 window.startGame = function() { 
     hideAllMenus(); 
+    document.getElementById('bottomBar').style.display = 'flex'; 
     if(animationId) cancelAnimationFrame(animationId); gameRunning = true; gamePaused = false; 
     scores = {p1:0, p2:0}; document.getElementById('s1').innerText="0"; document.getElementById('s2').innerText="0"; 
     if(isMobile) document.getElementById('mobileControls').style.display = 'block';

@@ -6,7 +6,26 @@ const modeModal = document.getElementById('modeSelectModal');
 const deviceModal = document.getElementById('deviceSelectModal');
 const msgBox = document.getElementById('gameMessage');
 
-function hideAllMenus() { menu.style.display = 'none'; settingsModal.style.display = 'none'; guideModal.style.display = 'none'; msgBox.style.display = 'none'; modeModal.style.display='none'; }
+// --- TANK PREVIEW VARIABLES (New System) ---
+let menuAnimId;
+let menuMouse = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
+
+// Theo dõi vị trí chuột trong Menu để xoay nòng súng
+document.addEventListener('mousemove', (e) => {
+    if (menu.style.display !== 'none') { // Chỉ theo dõi khi menu đang hiện
+        menuMouse.x = e.clientX;
+        menuMouse.y = e.clientY;
+    }
+});
+
+function hideAllMenus() { 
+    menu.style.display = 'none'; 
+    settingsModal.style.display = 'none'; 
+    guideModal.style.display = 'none'; 
+    msgBox.style.display = 'none'; 
+    modeModal.style.display='none'; 
+}
+
 function showModeSelect() { hideAllMenus(); modeModal.style.display = 'flex'; }
 function closeModeSelect() { hideAllMenus(); menu.style.display = 'flex'; }
 
@@ -17,19 +36,28 @@ function selectMode(mode) {
     const p2Area = document.getElementById('p2ControlArea');
     const p2Header = document.getElementById('p2ControlHeader');
 
+    // Cập nhật giao diện dựa trên chế độ chơi
     if(gameMode === 'pve') { 
         if(p2NameUI) p2NameUI.innerText = "BOT"; 
         if(p2Area) p2Area.style.display = "none";
         if(p2Header) p2Header.style.display = "none";
         if (p2Set) p2Set.style.display = 'none';
-
+        // Bot màu xám trong preview
+        drawTankPreview('previewP2', '#555555', true);
     } else { 
         if(p2NameUI) p2NameUI.innerText = "RED PLAYER"; 
         if(p2Area) p2Area.style.display = "block";
         if(p2Header) p2Header.style.display = "block";
         if (p2Set) p2Set.style.display = 'flex';
+        // Player 2 màu đỏ trong preview
+        drawTankPreview('previewP2', '#D32F2F', true);
     }
-    window.startGame(); // Call global startGame
+
+    // Dừng animation ở menu để tiết kiệm hiệu năng khi vào game
+    if (menuAnimId) cancelAnimationFrame(menuAnimId);
+
+    window.startGame(); // Gọi hàm bắt đầu game từ game.js
+    
     if (isMobile && screen.orientation && screen.orientation.lock) {
         screen.orientation.lock('landscape').catch(e => console.log("Không thể khóa xoay:", e));
     }
@@ -69,14 +97,23 @@ function openSettings() {
     settingsModal.style.display = 'flex'; 
 }
 function closeSettings() { hideAllMenus(); gamePaused = false; remapping = null; }
+
 function quitToMenu() { 
     if(animationId) cancelAnimationFrame(animationId); 
     gameRunning=false; gamePaused=false; 
     hideAllMenus(); 
+    
+    // Ẩn các thành phần In-Game
+    document.getElementById('bottomBar').style.display = 'none'; // Ẩn thanh điểm số
     document.getElementById('mobileControls').style.display = 'none'; 
+    
+    // Hiện Menu
     menu.style.display='flex'; 
     ctx.clearRect(0,0,canvas.width,canvas.height); 
-    roundEnding=false; if(roundEndTimer) clearTimeout(roundEndTimer); 
+    roundEnding=false; if(roundEndTimer) clearTimeout(roundEndTimer);
+    
+    // Bật lại Animation cho xe tăng ở Menu
+    animateMenu();
 }
 
 function renderWeaponSettings() {
@@ -84,7 +121,7 @@ function renderWeaponSettings() {
     const mainPanel = document.getElementById('mainSettingsPanel');
     if (!mainPanel) return;
     
-    // 1. Phần đầu: Header và Game Rules (Luôn hiển thị)
+    // 1. Phần đầu: Header và Game Rules
     let html = `
         <div class="settings-header-fixed"><div class="panel-header" style="margin:0; border:none; padding:0;">MATCH CONFIGURATION</div></div>
         <div class="settings-scroll-area">
@@ -95,7 +132,7 @@ function renderWeaponSettings() {
             </div>
     `;
 
-    // 2. [LOGIC MỚI] Chỉ hiển thị Settings AI nếu đang ở chế độ PVE (Player vs Bot)
+    // 2. Settings AI (Chỉ hiện khi PVE)
     if (gameMode === 'pve') {
         html += `
             <div class="settings-group">
@@ -106,7 +143,7 @@ function renderWeaponSettings() {
         `;
     }
 
-    // 3. Phần cuối: Danh sách vũ khí (Luôn hiển thị)
+    // 3. Danh sách vũ khí
     html += `<div class="settings-group"><div class="group-title">WEAPON DROP CHANCE (%)</div><div id="weaponListInternal">`;
     
     let weaponListHtml = "";
@@ -133,7 +170,7 @@ function renderWeaponSettings() {
                 </button>
             </div>
         </div>
-    </div></div>`; // Đóng các thẻ div còn lại
+    </div></div>`; 
     
     mainPanel.innerHTML = html;
     validateTotalDropRate();
@@ -173,6 +210,8 @@ function selectDevice(type) {
             screen.orientation.lock('landscape').catch(err => console.log("Khóa xoay không khả dụng (bỏ qua):", err));
         }
     }
+    // Bắt đầu animation ngay khi vào menu
+    animateMenu();
 }
 
 function setupMobileControls() {
@@ -242,6 +281,86 @@ function updateMobileConfig(player, type, value) {
     else { value = parseFloat(value); if (type === 'sensitivity') { mobileSettings[player].sensitivity = value; document.getElementById(`valSens${player === 'p1' ? 'P1' : 'P2'}`).innerText = value.toFixed(1); } else if (type === 'size') { mobileSettings[player].size = value; document.getElementById(`valSize${player === 'p1' ? 'P1' : 'P2'}`).innerText = value + '%'; const scale = value / 100; const setEl = document.querySelector(`.${player}-set`); if(setEl) setEl.style.transform = `scale(${scale})`; } }
 }
 
+function resetDropRates() {
+    Object.keys(DEFAULT_DROP_RATES).forEach(key => {
+        const val = DEFAULT_DROP_RATES[key];
+        pendingWeights[key] = val;
+        const slider = document.getElementById('slider_' + key);
+        const input = document.getElementById('input_' + key);
+        if (slider) slider.value = val;
+        if (input) input.value = val;
+    });
+    validateTotalDropRate();
+}
+
+// --- TANK PREVIEW LOGIC (CLEANED UP) ---
+function drawTankPreview(canvasId, color, isP2) {
+    const cvs = document.getElementById(canvasId);
+    if (!cvs) return;
+    const ctx = cvs.getContext('2d');
+    
+    // Xóa canvas
+    ctx.clearRect(0, 0, cvs.width, cvs.height);
+    
+    // Tính toán góc xoay dựa trên vị trí chuột
+    const rect = cvs.getBoundingClientRect();
+    const centerX = rect.left + rect.width / 2;
+    const centerY = rect.top + rect.height / 2;
+    const angleToMouse = Math.atan2(menuMouse.y - centerY, menuMouse.x - centerX);
+
+    ctx.save();
+    ctx.translate(cvs.width / 2, cvs.height / 2);
+    ctx.scale(1.8, 1.8);
+
+    // 1. VẼ THÂN XE (Cố định hướng)
+    // P1 hướng lên góc phải (-45 độ), P2 hướng lên góc trái (-135 độ)
+    const bodyAngle = isP2 ? -Math.PI * 0.75 : -Math.PI * 0.25;
+    ctx.rotate(bodyAngle);
+
+    // Bóng đổ
+    ctx.shadowColor = "rgba(0,0,0,0.5)"; ctx.shadowBlur = 6; ctx.shadowOffsetY = 3;
+    // Bánh xích
+    ctx.fillStyle = "#222"; ctx.fillRect(-14, -14, 28, 8); // Trái
+    ctx.fillRect(-14, 6, 28, 8);  // Phải
+    ctx.fillStyle = "#111"; 
+    for(let i=-12; i<12; i+=4) { ctx.fillRect(i, -14, 2, 8); ctx.fillRect(i, 6, 2, 8); }
+    // Thân
+    ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
+    ctx.fillStyle = "#333"; ctx.fillRect(-12, -7, 24, 14);
+    // Mũi xe (Màu đặc trưng)
+    ctx.fillStyle = color;
+    ctx.beginPath(); ctx.moveTo(-10, -5); ctx.lineTo(10, -5); ctx.lineTo(12, 0); ctx.lineTo(10, 5); ctx.lineTo(-10, 5); ctx.fill();
+
+    // 2. VẼ THÁP PHÁO (Xoay theo chuột)
+    // Quay ngược lại bodyAngle để về góc 0, sau đó quay theo chuột
+    ctx.rotate(-bodyAngle); 
+    ctx.rotate(angleToMouse); 
+
+    drawTurret(ctx, 'NORMAL', color); 
+
+    // Điểm trang trí
+    ctx.fillStyle = color; ctx.filter = "brightness(80%)"; ctx.beginPath(); ctx.arc(0, 0, 7, 0, Math.PI*2); ctx.fill(); ctx.filter = "none";
+    ctx.strokeStyle = "rgba(0,0,0,0.5)"; ctx.lineWidth = 1; ctx.stroke();
+    ctx.fillStyle = "rgba(255,255,255,0.3)"; ctx.beginPath(); ctx.arc(3, -2, 2, 0, Math.PI*2); ctx.fill();
+
+    ctx.restore();
+}
+
+function animateMenu() {
+    // Nếu menu đang ẩn thì không vẽ
+    if (menu.style.display === 'none') return;
+
+    // Màu P2 thay đổi tùy chế độ (PvE là màu xám, PvP là màu đỏ)
+    // Nếu chưa chọn mode, mặc định là đỏ
+    const isPvE = (typeof gameMode !== 'undefined' && gameMode === 'pve');
+    const p2Color = isPvE ? '#555555' : '#D32F2F';
+
+    drawTankPreview('previewP1', '#4CAF50', false);
+    drawTankPreview('previewP2', p2Color, true);
+
+    menuAnimId = requestAnimationFrame(animateMenu);
+}
+
 // Window Exports for HTML OnClick
 window.selectDevice = selectDevice;
 window.selectMode = selectMode;
@@ -257,29 +376,8 @@ window.closeModeSelect = closeModeSelect;
 window.cycleAI = cycleAI;
 window.remap = remap;
 window.updateMobileConfig = updateMobileConfig;
-window.restartMatch = function() { scores = { p1: 0, p2: 0 }; document.getElementById('s1').innerText="0"; document.getElementById('s2').innerText="0"; closeSettings(); window.startGame(); }
-
-function resetDropRates() {
-    // 1. Duyệt qua danh sách mặc định và khôi phục giá trị
-    Object.keys(DEFAULT_DROP_RATES).forEach(key => {
-        const val = DEFAULT_DROP_RATES[key];
-        
-        // Cập nhật biến tạm
-        pendingWeights[key] = val;
-        
-        // Cập nhật giao diện (Thanh kéo và Ô nhập số)
-        const slider = document.getElementById('slider_' + key);
-        const input = document.getElementById('input_' + key);
-        
-        if (slider) slider.value = val;
-        if (input) input.value = val;
-    });
-
-    // 2. Kiểm tra lại tổng số (để bật đèn xanh cho nút Apply)
-    validateTotalDropRate();
-}
-
 window.resetDropRates = resetDropRates;
+window.restartMatch = function() { scores = { p1: 0, p2: 0 }; document.getElementById('s1').innerText="0"; document.getElementById('s2').innerText="0"; closeSettings(); window.startGame(); }
 
 // Key Listeners
 window.addEventListener('keydown', e => { 
@@ -289,3 +387,8 @@ window.addEventListener('keydown', e => {
     if(e.code==='KeyF') if(!document.fullscreenElement) { if(document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(()=>{}); }
 });
 window.addEventListener('keyup', e => keys[e.code] = false);
+
+// Bắt đầu vẽ menu lần đầu tiên (nếu không chọn device)
+// Nếu chọn device, nó sẽ được gọi lại trong selectDevice
+// Nhưng để đảm bảo xe tăng hiện ngay khi load trang trên PC, ta gọi 1 lần ở đây
+animateMenu();
