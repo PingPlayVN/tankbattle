@@ -37,32 +37,29 @@
     </div>
 
     <div id="mapSelectModal">
-        <h2 style="color:#fff; margin-bottom: 20px;">SELECT BATTLEFIELD</h2>
-        
-        <div style="margin-bottom: 25px; display: flex; align-items: center; justify-content: center; gap: 15px; background: rgba(255,255,255,0.1); padding: 10px 20px; border-radius: 30px;">
-            <span style="font-weight: bold; color: #aaa; font-size: 12px; letter-spacing: 1px;">ONE SHOT</span>
-            <label class="switch">
-                <input type="checkbox" id="dmToggle">
-                <span class="slider round"></span>
-            </label>
-            <span style="font-weight: bold; color: #fff; font-size: 12px; letter-spacing: 1px; color: #4CAF50;">100 HP MODE</span>
+    <h2 style="color:#fff; margin-bottom: 30px;">SELECT BATTLEFIELD</h2>
+    
+    <div style="display: flex; gap: 20px; flex-wrap: wrap; justify-content: center;">
+        <div class="map-card day" onclick="window.selectMap('day')">
+            <div class="map-icon">☀️</div>
+            <div class="map-title">ONE SHOT</div>
+            <div class="map-desc">Daylight. 1 Hit Kill.<br>Classic Mode.</div>
         </div>
 
-        <div style="display: flex; gap: 20px; flex-wrap: wrap; justify-content: center;">
-            <div class="map-card day" onclick="window.selectMap('day')">
-                <div class="map-icon">☀️</div>
-                <div class="map-title">DAYLIGHT</div>
-                <div class="map-desc">Standard visibility.<br>Classic warfare.</div>
-            </div>
-            <div class="map-card night" onclick="window.selectMap('night')">
-                <div class="map-icon">🔦</div>
-                <div class="map-title">NIGHT OPS</div>
-                <div class="map-desc">Pitch black darkness.<br>Flashlights required.</div>
-            </div>
+        <div class="map-card night" onclick="window.selectMap('night')">
+            <div class="map-icon">🔦</div>
+            <div class="map-title">NIGHT OPS</div>
+            <div class="map-desc">Darkness. 1 Hit Kill.<br>Tactical Vision.</div>
         </div>
-        <button class="menu-btn" style="margin-top:20px; width: 150px;" onclick="window.closeMapSelect()">BACK</button>
+
+        <div class="map-card dm" onclick="window.selectMap('dm')">
+            <div class="map-icon">❤️</div> <div class="map-title">DEATHMATCH</div>
+            <div class="map-desc">100 HP Battle.<br>Damage System.</div>
+        </div>
     </div>
-
+    
+    <button class="menu-btn" style="margin-top:30px; width: 150px;" onclick="window.closeMapSelect()">BACK</button>
+</div>
     <div id="menuOverlay">
         <div class="main-title-box"><span class="title-prefix">WindHouse</span><h1 class="game-title">Tank Battle</h1></div>
         <div class="controls-container">
