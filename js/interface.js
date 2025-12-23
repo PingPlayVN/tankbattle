@@ -3,7 +3,7 @@ const menu = document.getElementById('menuOverlay');
 const settingsModal = document.getElementById('settingsModal');
 const guideModal = document.getElementById('guideModal');
 const modeModal = document.getElementById('modeSelectModal');
-const mapModal = document.getElementById('mapSelectModal'); // MỚI
+const mapModal = document.getElementById('mapSelectModal'); 
 const deviceModal = document.getElementById('deviceSelectModal');
 const msgBox = document.getElementById('gameMessage');
 
@@ -24,12 +24,12 @@ function hideAllMenus() {
     guideModal.style.display = 'none'; 
     msgBox.style.display = 'none'; 
     modeModal.style.display='none'; 
-    mapModal.style.display='none'; // Ẩn luôn Map Modal
+    mapModal.style.display='none'; 
 }
 
 function showModeSelect() { hideAllMenus(); modeModal.style.display = 'flex'; }
 function closeModeSelect() { hideAllMenus(); menu.style.display = 'flex'; }
-function closeMapSelect() { hideAllMenus(); modeModal.style.display = 'flex'; } // Back về Mode Select
+function closeMapSelect() { hideAllMenus(); modeModal.style.display = 'flex'; } 
 
 function selectMode(mode) {
     gameMode = mode; 
@@ -52,12 +52,11 @@ function selectMode(mode) {
         drawTankPreview('previewP2', '#D32F2F', true);
     }
     
-    // THAY ĐỔI: Không vào game ngay, mà hiện bảng chọn MAP
     hideAllMenus();
     mapModal.style.display = 'flex';
 }
 
-// MỚI: Hàm xử lý chọn bản đồ
+// --- LOGIC CHỌN BẢN ĐỒ & CHẾ ĐỘ HP (MỚI) ---
 function selectMap(type) {
     if (type === 'night') {
         isNightMode = true;
@@ -65,8 +64,16 @@ function selectMap(type) {
         isNightMode = false;
     }
 
+    // Đọc trạng thái công tắc HP Mode
+    const toggle = document.getElementById('dmToggle');
+    if (toggle && toggle.checked) {
+        isDeathmatch = true; // Bật chế độ máu
+    } else {
+        isDeathmatch = false; // Chế độ 1 shot
+    }
+
     if (menuAnimId) cancelAnimationFrame(menuAnimId);
-    window.startGame(); // Bây giờ mới vào game
+    window.startGame(); 
     
     if (isMobile && screen.orientation && screen.orientation.lock) {
         screen.orientation.lock('landscape').catch(e => console.log("Không thể khóa xoay:", e));
@@ -353,8 +360,6 @@ window.addEventListener('keydown', e => {
 window.addEventListener('keyup', e => keys[e.code] = false);
 
 animateMenu();
-
-// --- CẬP NHẬT CUỐI FILE interface.js ---
 
 // 1. CHẶN ZOOM KHI CHẠM 2 LẦN (DOUBLE TAP)
 let lastTouchEnd = 0;

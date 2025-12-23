@@ -7,9 +7,9 @@ const bgCtx = bgCanvas.getContext('2d');
 
 // Global Game State
 let gameRunning = false, gamePaused = false, roundEnding = false, roundEndTimer = null;
-let gameMode = 'pvp';
-// MỚI: Biến kiểm tra chế độ ban đêm
+let gameMode = 'pvp'; // 'pvp' hoặc 'pve'
 let isNightMode = false;
+let isDeathmatch = false; // MỚI: Biến kiểm tra chế độ có máu hay không
 
 let isMobile = false; 
 let remapping = null;
@@ -24,7 +24,7 @@ let bullets=[], walls=[], particles=[], powerups=[];
 let activeLasers = [];
 let mazeGrid = []; 
 let tracks = [];
-let p1, p2; // Player instances
+let p1, p2; 
 
 // Configuration
 const cellSize=65, wallThickness=5;
@@ -77,6 +77,22 @@ const WEAPONS = {
     MINE:     { ammo: 1,  color: '#000000', cooldown: 60,  weight: 15, desc: "Đặt mìn tàng hình (3s)." }
 };
 
+// --- CẤU HÌNH MÁU & SÁT THƯƠNG ---
+const MAX_HP = 100;
+
+const DAMAGE_TABLE = {
+    NORMAL: 20,     
+    GATLING: 8,     
+    TRIPLE: 20,     
+    FRAG: 30,       
+    FLAME: 2,       
+    DRILL: 35,      
+    MISSILE: 50,    
+    MINE: 75,       
+    LASER: 100,     
+    DEATHRAY: 100   
+};
+
 const DEFAULT_DROP_RATES = {
     DEATHRAY: 3, LASER: 5, SHIELD: 8, MISSILE: 8, DRILL: 10, 
     GATLING: 12, TRIPLE: 12, FLAME: 12, FRAG: 15, MINE: 15
@@ -126,7 +142,7 @@ function hasLineOfSight(x1, y1, x2, y2) {
     return true;
 }
 
-// Pathfinding (Giữ nguyên như cũ)
+// Pathfinding
 function getAStarPath(startX, startY, targetX, targetY) {
     let cols = Math.floor(canvas.width / cellSize);
     let rows = Math.floor(canvas.height / cellSize);

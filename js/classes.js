@@ -173,7 +173,7 @@ class Bullet {
             this.radius = 4; 
             this.speed = 4.0; 
             this.life = 600; 
-            this.bouncesLeft = 5; // Số lần phá tường tối đa
+            this.bouncesLeft = 5; 
             this.vx = Math.cos(angle) * this.speed; 
             this.vy = Math.sin(angle) * this.speed;
         } else if (type === 'missile') {
@@ -258,9 +258,7 @@ class Bullet {
         for(let k=0; k<steps; k++){
             this.x+=svx; this.y+=svy;
             
-            // LOGIC XỬ LÝ VA CHẠM TƯỜNG MỚI
             let hitWallIndex = -1;
-            // Kiểm tra va chạm và lấy Index của tường bị bắn
             for(let i=0; i<walls.length; i++) {
                 let w = walls[i];
                 if(circleRectCollide(this.x, this.y, this.radius, w.x, w.y, w.w, w.h)) {
@@ -272,10 +270,8 @@ class Bullet {
             if(hitWallIndex !== -1) {
                 createHitEffect(this.x, this.y, this.color);
                 
-                // --- XỬ LÝ ĐẶC BIỆT CHO DRILL ---
                 if (this.type === 'drill') {
-                    // 1. Tính toán hướng nảy TRƯỚC khi phá tường (để nảy đúng hướng)
-                    this.x -= svx; this.y -= svy; // Lùi lại 1 bước nhỏ
+                    this.x -= svx; this.y -= svy; 
                     if (checkWallCollision(this.x + svx, this.y, this.radius)) { 
                         this.vx = -this.vx; svx = -svx; 
                     } else { 
@@ -283,22 +279,16 @@ class Bullet {
                     }
                     this.angle = Math.atan2(this.vy, this.vx);
 
-                    // 2. Gọi hàm phá tường
                     if (window.destroyWall) window.destroyWall(hitWallIndex);
                     
-                    // 3. Trừ số lần nảy
                     this.bouncesLeft--;
                     if (this.bouncesLeft <= 0) {
                         this.dead = true;
                         createExplosion(this.x, this.y, this.color);
                     }
-                    
-                    // Break loop bước hiện tại để tránh lỗi tính toán sau khi tường biến mất
                     break; 
                 }
-                // --- KẾT THÚC LOGIC DRILL ---
 
-                // Logic va chạm cho các đạn thường khác (giữ nguyên logic cũ)
                 if(this.type === 'missile' || this.type === 'frag') {
                     this.x -= svx; this.y -= svy;
                     if (checkWallCollision(this.x + svx, this.y, this.radius)) { this.vx = -this.vx; svx = -svx; }
@@ -339,7 +329,6 @@ class Bullet {
         } 
         else if(this.type === 'drill') {
             ctx.fillStyle = this.color;
-            // Vẽ mũi khoan xoắn
             ctx.beginPath(); ctx.moveTo(6, 0); ctx.lineTo(-6, -4); ctx.lineTo(-6, 4); ctx.fill();
             ctx.strokeStyle = "#333"; ctx.lineWidth = 1;
             ctx.beginPath(); ctx.moveTo(-4, -3); ctx.lineTo(-2, 3); ctx.stroke();
@@ -370,15 +359,44 @@ class Tank {
         this.trackTimer = 0;
         this.needsTriggerReset = false; 
         
+        // --- KHỞI TẠO MÁU ---
+        this.hp = MAX_HP;
+        this.updateHPUI();
+        
         // AI Specific
         this.aiMode = 'SEEK'; 
         this.aiAimLockTimer = 0;
         this.aiIdealAngle = 0;
         this.aiReactionCounter = 0;
     }
+
     setWeapon(type) { this.weaponType = type; this.ammo = WEAPONS[type].ammo; this.maxAmmo = WEAPONS[type].ammo; this.cooldownTimer=0; }
+    
+    updateHPUI() {
+        let barId = (this.name === "P1") ? "hp-p1" : "hp-p2";
+        let barEl = document.getElementById(barId);
+        
+        if (barEl) {
+            // MỚI: Dùng biến isDeathmatch để kiểm tra
+            if (!isDeathmatch) {
+                barEl.style.width = "0%";
+                barEl.parentElement.style.opacity = "0";
+                return;
+            }
+            
+            barEl.parentElement.style.opacity = "1";
+            let pct = (this.hp / MAX_HP) * 100;
+            if (pct < 0) pct = 0;
+            barEl.style.width = pct + "%";
+            
+            if (pct <= 30) barEl.classList.add('hp-critical');
+            else barEl.classList.remove('hp-critical');
+        }
+    }
+
     takeDamage(killer, bullet) {
         if (this.dead || roundEnding) return; 
+        
         if (this.activeShield) {
             createSparks(this.x, this.y, "#ffffff", 8);
             if (bullet && bullet.type !== 'mine' && !bullet.dead) {
@@ -387,7 +405,38 @@ class Tank {
             }
             return;
         }
+
+        // --- MỚI: CHẾ ĐỘ DEATHMATCH ---
+        if (isDeathmatch) {
+            let damage = 20; 
+            if (bullet) {
+                let typeKey = 'NORMAL';
+                if(bullet.type === 'mini') typeKey = 'GATLING';
+                else if(bullet.type === 'missile') typeKey = 'MISSILE';
+                else if(bullet.type === 'mine') typeKey = 'MINE';
+                else if(bullet.type === 'drill') typeKey = 'DRILL';
+                else if(bullet.type === 'flame') typeKey = 'FLAME';
+                else if(bullet.type === 'frag') typeKey = 'FRAG';
+                
+                damage = DAMAGE_TABLE[typeKey] || 20;
+                createHitEffect(this.x, this.y, this.color);
+                bullet.dead = true; 
+            } else {
+                damage = DAMAGE_TABLE.LASER;
+                createHitEffect(this.x, this.y, "#fff");
+            }
+
+            this.hp -= damage;
+            this.updateHPUI();
+
+            if (this.hp > 0) return; 
+        }
+        // -----------------------------
+
         this.dead = true;
+        this.hp = 0;
+        this.updateHPUI();
+
         createExplosion(this.x, this.y, this.color, true);
         if (bullet) bullet.dead = true;
         
@@ -411,6 +460,7 @@ class Tank {
             }, 3000);
         }
     }
+
     update(walls, powerups) {
         if(this.dead) return;
         if(this.cooldownTimer>0) this.cooldownTimer--;
@@ -483,6 +533,21 @@ class Tank {
                 p.active = false; this.setWeapon(p.type); createHitEffect(this.x,this.y);
             }
         }
+
+        // --- [CÁCH 1: HIỆU ỨNG KHÓI/LỬA KHI HƯ HẠI] ---
+        if (isDeathmatch && !this.dead) {
+            // Máu dưới 50%: Bốc khói xám nhẹ (10% cơ hội mỗi frame)
+            if (this.hp <= 50 && this.hp > 20) {
+                if (Math.random() < 0.1) {
+                    particles.push(new Particle(this.x + (Math.random()-0.5)*10, this.y + (Math.random()-0.5)*10, 'smoke', '#555'));
+                }
+            }
+            // Máu dưới 20%: Bốc lửa và khói đen đậm
+            else if (this.hp <= 20) {
+                if (Math.random() < 0.2) particles.push(new Particle(this.x, this.y, 'fire', '#ff5722'));
+                if (Math.random() < 0.2) particles.push(new Particle(this.x, this.y, 'smoke', '#222'));
+            }
+        }
     }
     drawTracks() {
         this.trackTimer++;
@@ -508,7 +573,6 @@ class Tank {
         let midX = this.x + Math.cos(this.angle) * (muzzleDist/2); let midY = this.y + Math.sin(this.angle) * (muzzleDist/2);
         let ignoreWallBlock = (this.weaponType === 'DEATHRAY' || this.weaponType === 'LASER' || this.weaponType === 'FLAME');
         
-        // [UPDATE] FIX AI/PLAYER TỰ HỦY: Nếu nòng chạm tường -> Kẹt đạn + Spark (Không nổ)
         if (!ignoreWallBlock) {
             if(checkWallCollision(tipX, tipY, 2) || checkWallCollision(midX, midY, 2)) {
                 createSparks(tipX, tipY, "#888", 5); 
@@ -581,7 +645,6 @@ class Tank {
     }
 }
 
-// --- HELPER DRAW FUNCTIONS ---
 function drawTurret(ctx, type, color) {
     switch(type) {
         case 'GATLING': ctx.fillStyle = "#222"; ctx.fillRect(0, -5, 18, 10); ctx.fillStyle = "#555"; ctx.fillRect(18, -4, 10, 2); ctx.fillRect(18, 2, 10, 2); ctx.fillStyle = WEAPONS.GATLING.color; ctx.fillRect(18, -1, 12, 2); ctx.fillStyle = "#888"; ctx.fillRect(22, -5, 2, 10); break;
@@ -593,18 +656,16 @@ function drawTurret(ctx, type, color) {
         case 'MINE': ctx.fillStyle = "#222"; ctx.fillRect(0, -3, 16, 6); ctx.fillStyle = "#000"; ctx.fillRect(-14, -6, 6, 12); ctx.strokeStyle = "red"; ctx.strokeRect(-14, -6, 6, 12); break;
         case 'SHIELD': ctx.fillStyle = "#222"; ctx.fillRect(0, -3, 20, 6); ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(10, 0, 4, 0, Math.PI*2); ctx.fill(); break;
         case 'FLAME': ctx.fillStyle = "#222"; ctx.fillRect(0, -5, 14, 10); ctx.fillStyle = "#333"; ctx.fillRect(14, -6, 4, 12); ctx.fillStyle = "#ff5722"; ctx.fillRect(18, -4, 4, 8); ctx.fillStyle = "#ff9800"; ctx.beginPath(); ctx.arc(20, 0, 2, 0, Math.PI*2); ctx.fill(); break;
-        case 'NORMAL': default: ctx.fillStyle="#222"; ctx.fillRect(0,-3,24,6); ctx.fillStyle="#111"; ctx.fillRect(22,-4,4,8); ctx.fillStyle="#ccc"; ctx.fillRect(0,-1,10,2); break;
         case 'DRILL': 
             ctx.fillStyle = "#222"; ctx.fillRect(0, -6, 12, 12); 
             ctx.fillStyle = WEAPONS.DRILL.color; 
-            // Vẽ mũi khoan nhiều tầng
             ctx.beginPath(); ctx.moveTo(12, -5); ctx.lineTo(24, 0); ctx.lineTo(12, 5); ctx.fill();
             ctx.beginPath(); ctx.moveTo(12, -5); ctx.lineTo(8, -5); ctx.lineTo(8, 5); ctx.lineTo(12, 5); ctx.fill();
-            // Các đường ren xoắn
             ctx.strokeStyle = "#444"; ctx.lineWidth = 1;
             ctx.beginPath(); ctx.moveTo(14, -3); ctx.lineTo(14, 3); ctx.stroke();
             ctx.beginPath(); ctx.moveTo(18, -2); ctx.lineTo(18, 2); ctx.stroke();
             break;
+        default: ctx.fillStyle="#222"; ctx.fillRect(0,-3,24,6); ctx.fillStyle="#111"; ctx.fillRect(22,-4,4,8); ctx.fillStyle="#ccc"; ctx.fillRect(0,-1,10,2); break;
     }
     ctx.shadowBlur = 0; 
 }
