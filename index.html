@@ -38,6 +38,16 @@
 
     <div id="mapSelectModal">
         <h2 style="color:#fff; margin-bottom: 20px;">SELECT BATTLEFIELD</h2>
+        
+        <div style="margin-bottom: 25px; display: flex; align-items: center; justify-content: center; gap: 15px; background: rgba(255,255,255,0.1); padding: 10px 20px; border-radius: 30px;">
+            <span style="font-weight: bold; color: #aaa; font-size: 12px; letter-spacing: 1px;">ONE SHOT</span>
+            <label class="switch">
+                <input type="checkbox" id="dmToggle">
+                <span class="slider round"></span>
+            </label>
+            <span style="font-weight: bold; color: #fff; font-size: 12px; letter-spacing: 1px; color: #4CAF50;">100 HP MODE</span>
+        </div>
+
         <div style="display: flex; gap: 20px; flex-wrap: wrap; justify-content: center;">
             <div class="map-card day" onclick="window.selectMap('day')">
                 <div class="map-icon">☀️</div>
@@ -74,7 +84,7 @@
             <button class="btn-main btn-guide" onclick="window.openGuide()">ARMORY</button>
         </div>
         <div style="margin-top: 40px; font-size: 10px; color: #555; font-weight: bold; letter-spacing: 1px; text-transform: uppercase;">
-            [F] Fullscreen | v66.0 (Night Ops)
+            [F] Fullscreen | v68.0 (Tactical UI Update)
         </div>
     </div>
 
@@ -97,7 +107,7 @@
     <div id="modeSelectModal">
         <h2 style="color:#fff; margin-bottom: 20px;">SELECT GAME MODE</h2>
         <button class="mode-btn pvp" onclick="window.selectMode('pvp')"><span>2 PLAYER (PvP)</span><div class="mode-desc">Duel with a friend</div></button>
-        <button class="mode-btn pve" onclick="window.selectMode('pve')"><span>PLAYER vs BOT</span><div class="mode-desc">Advanced Aim & Tactics</div></button>
+        <button class="mode-btn pve" onclick="window.selectMode('pve')"><span>PLAYER vs BOT</span><div class="mode-desc">Training against AI</div></button>
         <button class="menu-btn" style="margin-top:20px; width: 150px;" onclick="window.closeModeSelect()">BACK</button>
     </div>
 
@@ -128,6 +138,9 @@
             <div class="hud-inner">
                 <div class="hud-info" style="align-items: flex-end;">
                     <div class="hud-name" id="p2NameUI">RED PLAYER</div>
+                    <div class="hp-track" style="opacity: 0;">
+                        <div class="hp-fill p2-fill" id="hp-p2"></div>
+                    </div>
                     <div class="hud-score" id="s2">0</div>
                 </div>
                 <div class="hud-ammo-box p2-ammo" id="ammo-p2"></div>
@@ -135,7 +148,7 @@
         </div>
 
         <div style="display: flex; flex-direction: column; align-items: center; z-index: 2;">
-            <div style="font-size: 9px; color:#444; letter-spacing: 2px; font-weight: bold; margin-bottom: 4px;">TACTICAL SYSTEM</div>
+            <div style="font-size: 9px; color:#aaa; letter-spacing: 2px; font-weight: bold; margin-bottom: 2px;">TACTICAL SYSTEM</div>
             <button class="tac-btn" onclick="window.openSettings()">MENU / CONFIG</button>
         </div>
 
@@ -143,6 +156,9 @@
             <div class="hud-inner">
                 <div class="hud-info">
                     <div class="hud-name">GREEN PLAYER</div>
+                    <div class="hp-track" style="opacity: 0;">
+                        <div class="hp-fill p1-fill" id="hp-p1"></div>
+                    </div>
                     <div class="hud-score" id="s1">0</div>
                 </div>
                 <div class="hud-ammo-box p1-ammo" id="ammo-p1"></div>
