@@ -3,8 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content">
-    <title>WindHouse - Tank Battle (Night Ops)</title>
+    <title>WindHouse - Tank Battle (Online Update)</title>
     <link rel="stylesheet" href="css/style.css">
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
 </head>
 <body>
 
@@ -37,29 +38,30 @@
     </div>
 
     <div id="mapSelectModal">
-    <h2 style="color:#fff; margin-bottom: 30px;">SELECT BATTLEFIELD</h2>
-    
-    <div style="display: flex; gap: 20px; flex-wrap: wrap; justify-content: center;">
-        <div class="map-card day" onclick="window.selectMap('day')">
-            <div class="map-icon">☀️</div>
-            <div class="map-title">ONE SHOT</div>
-            <div class="map-desc">Daylight. 1 Hit Kill.<br>Classic Mode.</div>
-        </div>
+        <h2 style="color:#fff; margin-bottom: 30px;">SELECT BATTLEFIELD</h2>
+        
+        <div style="display: flex; gap: 20px; flex-wrap: wrap; justify-content: center;">
+            <div class="map-card day" onclick="window.selectMap('day')">
+                <div class="map-icon">☀️</div>
+                <div class="map-title">ONE SHOT</div>
+                <div class="map-desc">Daylight. 1 Hit Kill.<br>Classic Mode.</div>
+            </div>
 
-        <div class="map-card night" onclick="window.selectMap('night')">
-            <div class="map-icon">🔦</div>
-            <div class="map-title">NIGHT OPS</div>
-            <div class="map-desc">Darkness. 1 Hit Kill.<br>Tactical Vision.</div>
-        </div>
+            <div class="map-card night" onclick="window.selectMap('night')">
+                <div class="map-icon">🔦</div>
+                <div class="map-title">NIGHT OPS</div>
+                <div class="map-desc">Darkness. 1 Hit Kill.<br>Tactical Vision.</div>
+            </div>
 
-        <div class="map-card dm" onclick="window.selectMap('dm')">
-            <div class="map-icon">❤️</div> <div class="map-title">DEATHMATCH</div>
-            <div class="map-desc">100 HP Battle.<br>Damage System.</div>
+            <div class="map-card dm" onclick="window.selectMap('dm')">
+                <div class="map-icon">❤️</div> <div class="map-title">DEATHMATCH</div>
+                <div class="map-desc">100 HP Battle.<br>Damage System.</div>
+            </div>
         </div>
+        
+        <button class="menu-btn" style="margin-top:30px; width: 150px;" onclick="window.closeMapSelect()">BACK</button>
     </div>
-    
-    <button class="menu-btn" style="margin-top:30px; width: 150px;" onclick="window.closeMapSelect()">BACK</button>
-</div>
+
     <div id="menuOverlay">
         <div class="main-title-box"><span class="title-prefix">WindHouse</span><h1 class="game-title">Tank Battle</h1></div>
         <div class="controls-container">
@@ -81,7 +83,7 @@
             <button class="btn-main btn-guide" onclick="window.openGuide()">ARMORY</button>
         </div>
         <div style="margin-top: 40px; font-size: 10px; color: #555; font-weight: bold; letter-spacing: 1px; text-transform: uppercase;">
-            [F] Fullscreen | v68.0 (Tactical UI Update)
+            [F] Fullscreen | v69.0 (Online Beta)
         </div>
     </div>
 
@@ -103,9 +105,39 @@
 
     <div id="modeSelectModal">
         <h2 style="color:#fff; margin-bottom: 20px;">SELECT GAME MODE</h2>
-        <button class="mode-btn pvp" onclick="window.selectMode('pvp')"><span>2 PLAYER (PvP)</span><div class="mode-desc">Duel with a friend</div></button>
-        <button class="mode-btn pve" onclick="window.selectMode('pve')"><span>PLAYER vs BOT</span><div class="mode-desc">Training against AI</div></button>
+        
+        <button class="mode-btn pvp" onclick="window.selectMode('pvp')">
+            <span>2 PLAYER (PvP)</span><div class="mode-desc">Duel with a friend (Offline)</div>
+        </button>
+        
+        <button class="mode-btn" onclick="window.openOnlineMenu()" style="border-left: 5px solid #9c27b0;">
+            <span>ONLINE (BETA)</span><div class="mode-desc">Play via Internet</div>
+        </button>
+
+        <button class="mode-btn pve" onclick="window.selectMode('pve')">
+            <span>PLAYER vs BOT</span><div class="mode-desc">Training against AI</div>
+        </button>
+        
         <button class="menu-btn" style="margin-top:20px; width: 150px;" onclick="window.closeModeSelect()">BACK</button>
+    </div>
+
+    <div id="onlineModal" style="display: none;">
+        <h2 style="color:#fff; margin-bottom: 20px;">ONLINE MULTIPLAYER</h2>
+        
+        <div class="online-section" id="hostSection">
+            <p style="color:#aaa; font-size:12px;">SEND THIS ID TO FRIEND:</p>
+            <div class="room-id-box" id="myRoomId" onclick="navigator.clipboard.writeText(this.innerText); alert('Copied ID!')" title="Click to Copy">GENERATING...</div>
+            <div style="color: #66bb6a; font-size: 11px; margin-top: 5px; display:none;" id="hostStatus">WAITING FOR PLAYER...</div>
+        </div>
+
+        <div style="width: 100%; height: 1px; background: #333; margin: 20px 0;"></div>
+
+        <div class="online-section" id="joinSection">
+            <input type="text" id="joinInput" placeholder="ENTER ROOM ID" class="room-input">
+            <button class="menu-btn" onclick="window.joinRoom()">JOIN ROOM</button>
+        </div>
+
+        <button class="menu-btn" style="margin-top:20px; width: 150px; background:#333;" onclick="window.closeOnlineMenu()">BACK</button>
     </div>
 
     <div id="guideModal">
@@ -167,7 +199,7 @@
 <script src="js/constants.js"></script>
 <script src="js/classes.js"></script>
 <script src="js/interface.js"></script>
-<script src="js/game.js"></script>
+<script src="js/network.js"></script> <script src="js/game.js"></script>
 
 </body>
 </html>
