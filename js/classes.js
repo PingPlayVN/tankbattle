@@ -4,9 +4,8 @@
 class TrackMark {
     constructor(x, y, angle) {
         this.x = x; this.y = y; this.angle = angle;
-        this.life = 300; this.maxLife = 300;
+        this.life = 75; this.maxLife = 75;
     }
-    // Cập nhật: Trừ life theo dt
     update(dt = 1) { this.life -= 1 * dt; }
     draw(ctx) {
         if (this.life <= 0) return;
@@ -36,7 +35,6 @@ class Particle {
         this.life = 1.0; 
     }
 
-    // Cập nhật: Áp dụng dt vào di chuyển và biến đổi
     update(dt = 1) {
         this.x += this.vx * dt; 
         this.y += this.vy * dt; 
@@ -103,10 +101,10 @@ class PowerUp {
         }
         this.angle = 0;
     }
-    // PowerUp xoay chỉ là hiệu ứng hình ảnh, không cần dt quá khắt khe, nhưng thêm vào cho mượt
+    
     draw() {
         if(!this.active) return;
-        this.angle += 0.03; // Nếu muốn chuẩn xác: += 0.03 * dt (nhưng cần truyền dt vào draw, tạm thời giữ nguyên)
+        this.angle += 0.03; 
         let rockAngle = Math.sin(this.angle) * 0.25; 
         let color = WEAPONS[this.type].color;
         ctx.save(); ctx.translate(this.x, this.y); 
@@ -127,13 +125,19 @@ class PowerUp {
 class LaserBeam {
     constructor(x, y, angle, owner, life = 90) {
         this.start = {x: x, y: y};
-        let len = 3000; if (owner.weaponType === 'DEATHRAY') len = 280; 
+        let wType = owner ? owner.weaponType : 'LASER';
+        let len = 3000; if (wType === 'DEATHRAY') len = 280; 
         this.end = { x: x + Math.cos(angle) * len, y: y + Math.sin(angle) * len };
         this.owner = owner; this.life = life; this.maxLife = life; this.active = true;
-        this.color = (owner.weaponType === 'DEATHRAY') ? WEAPONS.DEATHRAY.color : WEAPONS.LASER.color;
+        
+        if (wType === 'DEATHRAY') this.color = WEAPONS.DEATHRAY.color;
+        else if (owner && owner.color) this.color = owner.color; 
+        else this.color = WEAPONS.LASER.color;
+
         this.angle = angle;
         this.curveTarget = null;
-        if (owner.weaponType === 'LASER') { 
+        
+        if (owner && wType === 'LASER') { 
             let potentialTargets = [p1, p2];
             for(let t of potentialTargets) {
                 if (t === owner || t.dead) continue;
@@ -145,10 +149,12 @@ class LaserBeam {
             }
         }
     }
-    // Cập nhật: Life chưa tích hợp dt ở đây vì logic check hit từng frame. 
-    // Tuy nhiên, logic trừ life bên ngoài game.js đã nhân dt rồi.
-    // Hàm update này chủ yếu check hit.
-    update() {
+
+    update(dt = 1) {
+        this.life -= 1 * dt;
+        if (this.life <= 0) { this.active = false; return; }
+        if (!this.owner) return; 
+
         const checkHit = (tank) => {
             if (!tank.dead && this.owner !== tank) {
                 if (this.curveTarget === tank) { 
@@ -164,6 +170,7 @@ class LaserBeam {
         };
         checkHit(p1); checkHit(p2);
     }
+
     draw() {
         let ratio = this.life / this.maxLife; let width = 10 * ratio + Math.random() * 5; let opacity = Math.min(1, ratio * 1.5); 
         ctx.save(); ctx.globalAlpha = opacity; ctx.lineCap = "round";
@@ -189,8 +196,11 @@ class LaserBeam {
 
 class Bullet {
     constructor(x, y, angle, color, type, owner) {
-        this.x=x; this.y=y; this.type=type; this.owner=owner; this.color=color;
+        this.x=x; this.y=y; this.angle=angle;
+        this.type=type; this.owner=owner; this.color=color;
         let speed = 3.0; this.radius=2.5; this.life=480; this.friction = 1.0; 
+        this.smokeTimer = 0; 
+
         if(type==='frag') { speed = 4.0 * (2/3); this.radius=5; this.life=180; }
         if(type==='mini') { speed=5.0; this.radius=1.5; this.life=300; } 
         if(type==='fragment') { 
@@ -209,14 +219,31 @@ class Bullet {
             this.vx = Math.cos(angle) * this.speed; this.vy = Math.sin(angle) * this.speed;
         } else if (type === 'missile') {
             this.radius = 5; this.speed = 2.0; this.stage2Speed = 3.2; this.life = 600; this.maxLife = 600; 
-            this.angle = angle; this.vx = Math.cos(angle) * this.speed; this.vy = Math.sin(angle) * this.speed;
-            this.smokeTimer = 0; this.lockedTargetColor = null; 
+            this.vx = Math.cos(angle) * this.speed; this.vy = Math.sin(angle) * this.speed;
+            this.lockedTargetColor = null; 
             this.path = []; this.pathIndex = 0; this.pathUpdateTimer = 0;
         } else { this.vx=Math.cos(angle)*speed; this.vy=Math.sin(angle)*speed; }
         this.dead=false;
     }
 
-    // Cập nhật: Thêm dt và logic Sub-stepping
+    updateVisuals(dt = 1) {
+        if (this.type === 'missile') {
+            // [FIX] Client liên tục reset đối tượng đạn, nên timer không hoạt động.
+            // Sử dụng xác suất ngẫu nhiên (40%) để tạo khói, tạo hiệu ứng tương tự timer.
+            if (Math.random() < 0.4) { 
+                let smokeColor = this.lockedTargetColor ? this.lockedTargetColor : '#444';
+                // Nếu là Client, lockedTargetColor có thể không được sync, dùng tạm màu đạn
+                
+                particles.push(new Particle(
+                    this.x - Math.cos(this.angle) * 5, 
+                    this.y - Math.sin(this.angle) * 5, 
+                    'smoke', 
+                    smokeColor
+                )); 
+            }
+        }
+    }
+
     update(walls, dt = 1) {
         this.life -= 1 * dt; 
         if(this.life<=0) { 
@@ -273,7 +300,7 @@ class Bullet {
                     let diff = targetAngle - this.angle;
                     while(diff < -Math.PI) diff += Math.PI*2; while(diff > Math.PI) diff -= Math.PI*2;
                     let turnSpeed = 0.15; 
-                    this.angle += Math.sign(diff) * Math.min(Math.abs(diff), turnSpeed * dt); // Xoay theo dt
+                    this.angle += Math.sign(diff) * Math.min(Math.abs(diff), turnSpeed * dt); 
                 }
                 this.vx = Math.cos(this.angle) * this.speed; 
                 this.vy = Math.sin(this.angle) * this.speed;
@@ -295,9 +322,7 @@ class Bullet {
             if(Math.abs(this.vx) < 0.05 && Math.abs(this.vy) < 0.05) { this.vx = 0; this.vy = 0; } 
         }
         
-        // --- SUB-STEPPING MOVEMENT ---
         let steps = (this.type==='frag' || this.type==='drill') ? 5 : 8; 
-        // Tính tổng lượng di chuyển trong frame này (nhân dt), sau đó chia nhỏ ra
         let svx = (this.vx * dt) / steps; 
         let svy = (this.vy * dt) / steps;
         
@@ -347,11 +372,14 @@ class Bullet {
             }
         }
     }
+    
     draw() { 
         if (this.type === 'mine' && !this.visible) return;
         ctx.save(); ctx.translate(this.x, this.y);
         if(this.type === 'fragment') { if(this.life < 60) ctx.globalAlpha = this.life / 60; }
+        
         ctx.rotate(this.angle); 
+
         if(this.type === 'mini') { ctx.fillStyle = this.color; ctx.beginPath(); ctx.moveTo(4, 0); ctx.lineTo(-4, -2); ctx.lineTo(-4, 2); ctx.fill(); } 
         else if(this.type === 'frag') { ctx.fillStyle = (Math.floor(this.life/10)%2===0) ? "#fff" : this.color; ctx.beginPath(); ctx.arc(0,0,5,0,Math.PI*2); ctx.fill(); ctx.strokeStyle = "#fff"; ctx.lineWidth=1; ctx.stroke(); } 
         else if(this.type === 'flame') {
@@ -386,21 +414,27 @@ class Tank {
         this.startX=x; this.startY=y; this.color=color; this.name=name; this.ctrls=ctrls; this.uiId=uiId;
         this.pKey = name === "P1" ? "p1" : "p2"; 
         this.isAI = isAI;
+        
+        // [FIX] Cờ xác định xe này được điều khiển qua mạng
+        this.isNetworkControlled = false; 
+        
         this.lastTrackX = x; this.lastTrackY = y;
         this.reset();
-        this.targetX = x;
-        this.targetY = y;
+        this.targetX = x; this.targetY = y;
         this.targetAngle = this.angle;
-        
-        this.reset();
     }
+
     reset() {
         this.x=this.startX; this.y=this.startY; this.angle=Math.random()*Math.PI*2;
         this.dead=false; this.hitbox=8; this.setWeapon('NORMAL');
         this.reloadTimer=0; this.spinning = false; this.spinTimer = 0;
         this.activeShield = false; this.shieldTimer = 0;
         this.cachedAmmo = -1; this.cachedWeapon = '';
-        this.currentVx = 0; this.currentVy = 0;
+        
+        // [FIX] Đặt lại vận tốc về 0
+        this.currentVx = 0; 
+        this.currentVy = 0;
+        
         this.aiPathTimer = 0; this.aiCurrentPath = []; this.aiTargetCell = null;
         this.trackTimer = 0;
         this.needsTriggerReset = false; 
@@ -408,27 +442,17 @@ class Tank {
         this.updateHPUI();
         this.aiMode = 'SEEK'; this.aiAimLockTimer = 0; this.aiIdealAngle = 0; this.aiReactionCounter = 0;
         this.lastTrackX = this.x; this.lastTrackY = this.y;
-        this.targetX = this.x;
-        this.targetY = this.y;
-        this.targetAngle = this.angle;
+        this.targetX = this.x; this.targetY = this.y; this.targetAngle = this.angle;
     }
 
     interpolate(dt = 1) {
-        // Hệ số làm mượt (0.1 = chậm/mượt, 0.5 = nhanh/gắt). 
-        // 0.2 * dt là mức cân bằng tốt.
         const smoothFactor = 0.2 * dt; 
-
-        // Làm mượt vị trí X, Y
         this.x += (this.targetX - this.x) * smoothFactor;
         this.y += (this.targetY - this.y) * smoothFactor;
-
-        // Làm mượt góc quay (Xử lý trường hợp quay qua mốc 0/360 độ)
         let diff = this.targetAngle - this.angle;
         while (diff < -Math.PI) diff += Math.PI * 2;
         while (diff > Math.PI) diff -= Math.PI * 2;
         this.angle += diff * smoothFactor;
-
-        // Nếu khoảng cách quá xa (ví dụ mới hồi sinh), thì dịch chuyển ngay lập tức (Teleport)
         if (Math.hypot(this.targetX - this.x, this.targetY - this.y) > 200) {
             this.x = this.targetX;
             this.y = this.targetY;
@@ -485,15 +509,11 @@ class Tank {
         
         const msgBox = document.getElementById('gameMessage');
         
-        // Logic xác định thắng thua
         if (p1.dead && p2.dead) {
             if(roundEndTimer) clearTimeout(roundEndTimer); roundEnding = true;
-            
-            // [MỚI] Gửi thông báo DRAW cho Client nếu là Host
             if (typeof isOnline !== 'undefined' && isOnline && typeof isHost !== 'undefined' && isHost && window.sendRoundEnd) {
                 window.sendRoundEnd("DRAW!", "#fff");
             }
-
             msgBox.innerText = "DRAW!"; msgBox.style.color = "#fff"; msgBox.style.display = "block"; setTimeout(resetRound, 2000);
         } else {
             roundEndTimer = setTimeout(() => {
@@ -512,42 +532,46 @@ class Tank {
                     resultColor = "#4CAF50";
                 }
                 
-                // Cập nhật điểm số local
                 document.getElementById('s1').innerText = scores.p1; document.getElementById('s2').innerText = scores.p2;
-                
-                // Hiển thị thông báo trên Host
                 msgBox.innerText = resultText; 
                 msgBox.style.color = resultColor;
                 msgBox.style.display = "block"; 
 
-                // [MỚI] Gửi thông báo THẮNG/THUA cho Client nếu là Host
                 if (typeof isOnline !== 'undefined' && isOnline && typeof isHost !== 'undefined' && isHost && window.sendRoundEnd) {
                     window.sendRoundEnd(resultText, resultColor);
                 }
 
                 setTimeout(resetRound, 2000);
-            }, 3000); // Host đợi 3 giây để sync animations rồi mới báo kết quả
+            }, 3000);
         }
     }
 
-    // Cập nhật: Input mạng cũng cần dt
-    overrideInput(netInput, dt = 1) {
-        if (!netInput || (this.name !== "P2" && this.name !== "CLIENT")) return; 
-        let spd = 0; let firing = false;
+    // [FIX] Hàm nhận input từ mạng và chuyển thành vận tốc
+    overrideInput(input) {
+        if (!input) return;
 
-        if (netInput.left) this.angle -= 0.05 * dt; 
-        if (netInput.right) this.angle += 0.05 * dt;
-        if (netInput.up) spd = 2; else if (netInput.down) spd = -2;
-        if (netInput.shoot) firing = true;
+        // 1. Góc xoay
+        if (input.left) this.angle -= 0.05; 
+        if (input.right) this.angle += 0.05;
 
-        if (this.needsTriggerReset) { if (!firing) this.needsTriggerReset = false; else firing = false; }
-        if (firing) this.shoot(walls);
+        // 2. Tốc độ
+        let spd = 0;
+        if (input.up) spd = 2; 
+        else if (input.down) spd = -2;
 
-        if(spd !== 0) {
-            this.currentVx = Math.cos(this.angle)*spd; this.currentVy = Math.sin(this.angle)*spd;
-            if(!checkWallCollision(this.x + this.currentVx * dt, this.y, this.hitbox)) { this.x += this.currentVx * dt; }
-            if(!checkWallCollision(this.x, this.y + this.currentVy * dt, this.hitbox)) { this.y += this.currentVy * dt; }
-            this.drawTracks();
+        if (spd !== 0) {
+            this.currentVx = Math.cos(this.angle) * spd; 
+            this.currentVy = Math.sin(this.angle) * spd;
+        } else {
+            this.currentVx = 0;
+            this.currentVy = 0;
+        }
+
+        // 3. Bắn
+        if (input.shoot) {
+            if (!this.needsTriggerReset) this.shoot(walls);
+        } else {
+            this.needsTriggerReset = false;
         }
     }
 
@@ -559,7 +583,6 @@ class Tank {
         }
     }
 
-    // Cập nhật: Thêm dt vào logic update
     update(walls, powerups, dt = 1) {
         if(this.dead) return;
         if(this.cooldownTimer>0) this.cooldownTimer -= 1 * dt;
@@ -575,7 +598,8 @@ class Tank {
         if(this.weaponType==='NORMAL' && this.ammo<this.maxAmmo) { this.reloadTimer += 1 * dt; if(this.reloadTimer>=RELOAD_TIME){ this.ammo++; this.reloadTimer=0; } } else this.reloadTimer=0;
         if(this.weaponType!=='NORMAL' && this.ammo<=0) { this.setWeapon('NORMAL'); this.needsTriggerReset = true; }
 
-        if (!this.isAI) {
+        // [FIX] CHỈ ĐỌC PHÍM NẾU KHÔNG PHẢI AI VÀ KHÔNG PHẢI NETWORK
+        if (!this.isAI && !this.isNetworkControlled) {
             let spd = 0; let firing = false;
             if (isMobile) {
                 let input = this.pKey === 'p1' ? mobileInput.p1 : mobileInput.p2;
@@ -584,7 +608,7 @@ class Tank {
                      let diff = targetAngle - this.angle;
                      while(diff < -Math.PI) diff += Math.PI*2; while(diff > Math.PI) diff -= Math.PI*2;
                      let sens = mobileSettings[this.pKey].sensitivity;
-                     this.angle += Math.sign(diff) * Math.min(Math.abs(diff), 0.1 * sens * dt); // Áp dụng dt
+                     this.angle += Math.sign(diff) * Math.min(Math.abs(diff), 0.1 * sens * dt); 
                      spd = 2; 
                 }
                 if (input.fire) firing = true;
@@ -595,17 +619,26 @@ class Tank {
                 if (keys[c.shoot]) firing = true;
             }
             
+            // Tính vận tốc từ input cục bộ
+            if (spd !== 0) {
+                this.currentVx = Math.cos(this.angle)*spd; 
+                this.currentVy = Math.sin(this.angle)*spd;
+            } else {
+                this.currentVx = 0;
+                this.currentVy = 0;
+            }
+            
             if (this.needsTriggerReset) { if (!firing) this.needsTriggerReset = false; else firing = false; }
             if (firing) this.shoot(walls);
-
-            if(spd!==0) {
-                this.currentVx = Math.cos(this.angle)*spd; this.currentVy = Math.sin(this.angle)*spd;
-                // Áp dụng dt cho di chuyển
-                if(!checkWallCollision(this.x + this.currentVx * dt, this.y, this.hitbox)) { this.x += this.currentVx * dt; }
-                if(!checkWallCollision(this.x, this.y + this.currentVy * dt, this.hitbox)) { this.y += this.currentVy * dt; }
-                this.drawTracks();
-            }
-        } 
+        }
+        
+        // [FIX] LOGIC VẬT LÝ DI CHUYỂN (ÁP DỤNG CHO TẤT CẢ)
+        // Network Controlled xe đã có currentVx/Vy từ overrideInput
+        if(this.currentVx !== 0 || this.currentVy !== 0) {
+            if(!checkWallCollision(this.x + this.currentVx * dt, this.y, this.hitbox)) { this.x += this.currentVx * dt; }
+            if(!checkWallCollision(this.x, this.y + this.currentVy * dt, this.hitbox)) { this.y += this.currentVy * dt; }
+            this.drawTracks();
+        }
 
         for(let p of powerups) {
             if(p.active && Math.hypot(this.x-p.x, this.y-p.y)<20) {
@@ -817,8 +850,6 @@ class Barrel {
     explode() {
         if (!this.active) return;
         this.active = false;
-        
-        // Gọi createExplosion, hàm này sẽ tự động xử lý gửi mạng trong game.js
         createExplosion(this.x, this.y, "#ffeb3b", true); 
         createExplosion(this.x, this.y, "#ff5722", true); 
         

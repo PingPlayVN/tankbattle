@@ -546,10 +546,11 @@ function generateMaze() {
     p2.startX=grid[arr[1]].i*cellSize+cellSize/2; p2.startY=grid[arr[1]].j*cellSize+cellSize/2;
     
     // Logic P2 Online
-    if (isOnline) {
-        if (isHost) {
+    if (typeof isOnline !== 'undefined' && isOnline) {
+        if (typeof isHost !== 'undefined' && isHost) {
             p2.isAI = false; 
-            p2.name = "CLIENT"; // P2 là người join
+            p2.isNetworkControlled = true; // [FIX] BẮT BUỘC PHẢI CÓ DÒNG NÀY
+            p2.name = "CLIENT"; 
         } else {
             // Client ko cần quan tâm P2 setup vì nhận state từ Host
             p2.isAI = false;
@@ -663,18 +664,40 @@ function loop() {
     animationId = requestAnimationFrame(loop); 
     if(gamePaused) return;
 
-    // --- PHẦN VẼ (RENDER) ---
-    // Phần này luôn chạy cho cả Host và Client
-    let dx=0, dy=0; if(shakeAmount>0){ dx=(Math.random()-0.5)*shakeAmount; dy=(Math.random()-0.5)*shakeAmount; shakeAmount*=0.9; if(shakeAmount<0.5)shakeAmount=0; }
+    // --- PHẦN RENDER ---
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
     
-    ctx.save(); ctx.translate(dx,dy); ctx.clearRect(-dx,-dy,canvas.width,canvas.height); 
-    ctx.fillStyle="#444"; ctx.fill(wallPath);
-    
-    bgCtx.clearRect(0, 0, canvas.width, canvas.height); 
-    for(let i=tracks.length-1; i>=0; i--) { let t = tracks[i]; t.update(); t.draw(bgCtx); if (t.life <= 0) tracks.splice(i, 1); }
+    if (shakeAmount > 0) {
+        let sx = (Math.random() - 0.5) * shakeAmount;
+        let sy = (Math.random() - 0.5) * shakeAmount;
+        ctx.save();
+        ctx.translate(sx, sy);
+        shakeAmount -= 1.5; if(shakeAmount < 0) shakeAmount = 0;
+    }
 
+    // Vẽ nền tường (Chỉ vẽ 1 lần khi map đổi, nhưng ở đây vẽ mỗi frame để đơn giản)
+    bgCtx.clearRect(0, 0, canvas.width, canvas.height);
+    bgCtx.fillStyle = "#222"; 
+    bgCtx.fill(wallPath);
+    bgCtx.strokeStyle = "#444"; 
+    bgCtx.lineWidth = 2; 
+    bgCtx.stroke(wallPath);
+
+    for(let i = tracks.length - 1; i >= 0; i--) {
+        let t = tracks[i];
+        t.update();          // Giảm life (độ mờ)
+        t.draw(bgCtx);       // Vẽ lên background
+        if(t.life <= 0) {
+            tracks.splice(i, 1); // Xóa khỏi mảng nhớ khi đã biến mất hoàn toàn
+        }
+    }
+    
+    // Vẽ lưới sàn (tùy chọn)
+    // ...
+
+    // --- RENDER LIGHTING & SHADOWS ---
     if (isNightMode) {
-        renderLighting(); 
+        renderLighting();
         ctx.drawImage(shadowCanvas, 0, 0);
     }
 
@@ -690,14 +713,27 @@ function loop() {
         p1.checkMovementAndTrack();
         p2.checkMovementAndTrack();
 
+        // Vẽ và cập nhật Laser (Visual Only)
+        // [SỬA ĐỔI] Client giờ nhận laser từ mạng, chỉ cần loop vẽ và giảm life visual (để mượt hơn)
+        for(let i=activeLasers.length-1; i>=0; i--) { 
+            let l = activeLasers[i]; 
+            // Không gọi l.update() logic va chạm, chỉ trừ life để hiệu ứng fade out mượt
+            l.life -= 1; // Visual decay
+            l.draw(); 
+        }
+
         for(let p of powerups) p.draw();
         for(let bar of barrels) if(bar.active) bar.draw();
-        for(let b of bullets) b.draw(); 
+        
+        // [SỬA ĐỔI] Vẽ đạn VÀ cập nhật hiệu ứng khói (Visuals)
+        for(let b of bullets) {
+            b.draw(); 
+            b.updateVisuals(); // [QUAN TRỌNG] Tạo khói cho tên lửa ở phía Client
+        }
         
         p1.draw(); 
         p2.draw();
 
-        // [MỚI] THÊM DÒNG NÀY ĐỂ VẼ THANH ĐẠN (BOTTOM BAR) TRÊN CLIENT
         updateAmmoUI(p1);
         updateAmmoUI(p2);
         
@@ -721,13 +757,23 @@ function loop() {
 
         // UPDATE P2 (KHÁCH HOẶC BOT HOẶC LOCAL P2)
         if (isOnline && isHost) {
-            // Nếu Online Host: Override điều khiển P2 bằng input từ mạng
-            p2.overrideInput(networkInputP2); 
+    // --- HOST XỬ LÝ XE KHÁCH (XE ĐỎ) ---
+    
+    // 1. Áp dụng input mạng trước để set vận tốc/góc
+    if (window.networkInputP2) {
+        p2.overrideInput(window.networkInputP2);
+    }
+    
+    // 2. Gọi update để tính toán va chạm và di chuyển vật lý
+    // (Bên trong update sẽ thấy cờ isNetworkControlled=true và bỏ qua phím cục bộ)
+    p2.update(walls, powerups);
+    
+} else if (p2.isAI) {
+            // Logic BOT
+            updateAI(p2, p1); 
             p2.update(walls, powerups);
-        } else if (p2.isAI) {
-            updateAI(p2, p1); p2.update(walls, powerups);
         } else {
-            // Offline PvP
+            // Logic Offline 2 người cùng máy (Không dùng trong Online)
             p2.update(walls, powerups);
         }
         p2.draw(); 
@@ -774,7 +820,7 @@ function loop() {
 
 window.startGame = function() { 
     hideAllMenus(); 
-    document.getElementById('onlineModal').style.display = 'none'; // Ẩn menu online
+    document.getElementById('onlineModal').style.display = 'none'; 
     document.getElementById('bottomBar').style.display = 'flex'; 
 
     if(animationId) cancelAnimationFrame(animationId); 
@@ -789,7 +835,15 @@ window.startGame = function() {
         conn.send({ type: 'START' });
     }
 
-    if(isMobile) document.getElementById('mobileControls').style.display = 'block';
+    // --- [SỬA LẠI] GỌI HÀM XỬ LÝ JOYSTICK TỪ INTERFACE.JS ---
+    if(isMobile) {
+        // Gọi hàm layout, dùng setTimeout để đảm bảo UI đã load xong
+        setTimeout(() => {
+            if(window.applyOnlineMobileLayout) window.applyOnlineMobileLayout();
+        }, 100);
+    }
+    // --------------------------------------------------------
+
     resetRound(); 
     loop(); 
 }
