@@ -854,35 +854,44 @@ p2 = new Tank(0,0,"#D32F2F","P2",null,'ammo-p2');
 
 // Hàm phá tường (đã cập nhật để sync mạng)
 // isNetworkEvent = true nghĩa là lệnh này đến từ mạng (Client nhận), không cần gửi lại Host
-function destroyWall(index, isNetworkEvent = false) { 
-    if (index > -1 && index < walls.length) {
-        let w = walls[index];
-        if (w.x < 5 || w.y < 5 || w.x + w.w > canvas.width - 5 || w.y + w.h > canvas.height - 5) {
-            createSparks(w.x + w.w/2, w.y + w.h/2, "#aaa", 5); 
-            return; 
-        }
-        let cx = w.x + w.w/2;
-        let cy = w.y + w.h/2;
+window.destroyWall = function(index, isNetworkEvent = false) { 
+    // Kiểm tra an toàn: nếu mảng walls chưa tồn tại hoặc index sai thì dừng
+    if (typeof walls === 'undefined' || index < 0 || index >= walls.length) return;
+
+    let w = walls[index];
+    
+    // Tính toán tâm tường để tạo hiệu ứng
+    let cx = w.x + w.w/2;
+    let cy = w.y + w.h/2;
+    
+    // Tạo hiệu ứng vỡ tường
+    if (typeof createSparks === 'function') createSparks(cx, cy, "#aaa", 8); 
+    if (typeof particles !== 'undefined') {
         for(let k=0; k<8; k++) {
             particles.push(new Particle(cx + (Math.random()-0.5)*w.w, cy + (Math.random()-0.5)*w.h, 'debris', '#555'));
         }
-        createSmoke(cx, cy);
-        
-        // Xóa tường và vẽ lại
-        walls.splice(index, 1);
-        wallPath = new Path2D();
-        for(let w of walls) {
-            wallPath.rect(w.x, w.y, w.w, w.h);
-        }
-        
-        // [ONLINE SYNC] Nếu là Host và không phải lệnh từ mạng, gửi sự kiện cho Client
-        if (isOnline && isHost && !isNetworkEvent && window.sendWallBreak) {
-            window.sendWallBreak(index);
-        }
     }
-}
+    if (typeof createSmoke === 'function') createSmoke(cx, cy);
+    
+    // Xóa tường khỏi mảng
+    walls.splice(index, 1);
+    
+    // Vẽ lại đường dẫn tường (Hitbox)
+    wallPath = new Path2D();
+    for(let wal of walls) {
+        wallPath.rect(wal.x, wal.y, wal.w, wal.h);
+    }
+    
+    // [ONLINE SYNC] Gửi sự kiện phá tường cho Client (nếu là Host)
+    if (typeof isOnline !== 'undefined' && isOnline && 
+        typeof isHost !== 'undefined' && isHost && 
+        !isNetworkEvent && window.sendWallBreak) {
+        window.sendWallBreak(index);
+    }
+};
 // Cập nhật lại window.destroyWall để truy cập được từ bên ngoài (console hoặc các module khác)
-window.destroyWall = function(idx, isNet = false) { destroyWall(idx, isNet); }
+window.createExplosion = createExplosion;
+window.createHitEffect = createHitEffect;
 
 // [MỚI] Export thêm các hàm effect để network gọi
 window.createExplosion = createExplosion;

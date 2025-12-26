@@ -864,10 +864,15 @@ class Barrel {
                 if (p.hp <= 0) p.takeDamage(null, null); 
             }
         });
+        
+        // [FIX] Sử dụng window.destroyWall thay vì gọi trực tiếp để tránh lỗi scope
         for (let i = walls.length - 1; i >= 0; i--) {
             let w = walls[i]; let wx = w.x + w.w / 2; let wy = w.y + w.h / 2;
-            if (dist(this.x, this.y, wx, wy) < range - 20) { destroyWall(i); }
+            if (dist(this.x, this.y, wx, wy) < range - 20) { 
+                if (window.destroyWall) window.destroyWall(i); 
+            }
         }
+        
         barrels.forEach(b => { if (b.active && b !== this && dist(this.x, this.y, b.x, b.y) < range) { setTimeout(() => b.explode(), 150); } });
     }
 }
