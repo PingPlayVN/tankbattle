@@ -48,18 +48,23 @@ const controls = {
 
 // AI Config
 const AI_DIFFICULTY = {
-    EASY: { reaction: 8, aimErr: 0.02, moveSpeed: 2.5, bounces: 2 },
-    HARD: { reaction: 0, aimErr: 0.0, moveSpeed: 3.0, bounces: 3 }
+    EASY: { reaction: 8, aimErr: 0.02, moveSpeed: 2, bounces: 2 },
+    HARD: { reaction: 0, aimErr: 0.0, moveSpeed: 2, bounces: 3 }
 };
 
 const AI_PERSONALITY = {
-    BALANCED: { type: 'balanced', label: 'BALANCED' },
-    RUSHER: { type: 'rusher', label: 'RUSHER (AGGRO)' },
-    SNIPER: { type: 'sniper', label: 'SNIPER (CAMP)' },
-    CAMPER: { type: 'camper', label: 'CAMPER (HIDE)' }
+    BALANCED: { type: 'balanced', label: '🤖 BALANCED', stopDist: 200, aggression: 0.5 },
+    RUSHER:   { type: 'rusher',   label: '⚔️ RUSH B!',  stopDist: 0,   aggression: 1.0 }, // Lao thẳng vào
+    SNIPER:   { type: 'sniper',   label: '🎯 SNIPER',   stopDist: 450, aggression: 0.2 }, // Đứng xa bắn
+    CAMPER:   { type: 'camper',   label: '⛺ CAMPER',   stopDist: 999, aggression: 0.0 }  // Núp lùm
 };
 
-let aiConfig = { difficulty: 'EASY', personality: 'BALANCED' };
+// Config mặc định
+let aiConfig = { difficulty: 'HARD', personality: 'BALANCED' };
+
+// Biến lưu suy nghĩ của Gemini để hiển thị lên màn hình
+window.aiThinkingText = "";
+
 
 // Weapons Config
 const RELOAD_TIME = 75;
