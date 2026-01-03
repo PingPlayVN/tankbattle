@@ -77,53 +77,45 @@ const AI_CONFIG = {
 function updateAI(ai, opponent) {
     if (ai.dead || opponent.dead) return;
 
-    // --- LOGIC API STRATEGY (Mới) ---
-    
-    // Mỗi 600 frames (khoảng 10 giây) gọi API chiến thuật 1 lần
+    // --- 0. GỌI API CHIẾN THUẬT ---
     if (!ai.strategyTimer) ai.strategyTimer = 0;
     ai.strategyTimer++;
-    if (ai.strategyTimer > 600) {
-        updateAiPersonality(ai.hp, opponent.hp);
+    if (ai.strategyTimer > 300) { // Gọi thường xuyên hơn (5s/lần)
+        consultAI(ai, opponent);
+        let nearbyItems = powerups.filter(p => p.active);
+        if (nearbyItems.length > 0) consultPowerupAI(ai, opponent, nearbyItems);
         ai.strategyTimer = 0;
     }
 
     // Reset Velocity
-    ai.currentVx = 0;
-    ai.currentVy = 0;
+    ai.currentVx = 0; ai.currentVy = 0;
 
-    // --- 1. GOD MODE DODGE (SỬA LỖI ĐI NGANG) ---
+    // --- 1. SỐNG SÓT LÀ SỐ 1 (GOD MODE DODGE) ---
+    // Luôn ưu tiên né đạn bất kể API bảo làm gì
     let survivalVector = getSurvivalMove(ai, bullets, walls);
-    
     if (survivalVector.active) {
-        // Tính góc cần di chuyển để né
         let targetDodgeAngle = Math.atan2(survivalVector.y, survivalVector.x);
-        
-        // Xoay xe thật nhanh về hướng né (0.5 là tốc độ xoay rất nhanh)
         rotateTowards(ai, targetDodgeAngle, 0.5); 
-        
-        // Logic di chuyển chuẩn Tank: Chỉ đi khi đầu xe đã hướng về phía cần đi
-        // (Hoặc đi lùi nếu hướng né ở ngay sau lưng)
         let angleDiff = normalizeAngle(ai.angle - targetDodgeAngle);
-        
-        // Tốc độ né
-        let dodgeSpeed = 2.5; 
-
-        // Nếu góc lệch ít (< 45 độ) -> Đi tới
         if (Math.abs(angleDiff) < 1.0) {
-            let vx = Math.cos(ai.angle) * dodgeSpeed;
-            let vy = Math.sin(ai.angle) * dodgeSpeed;
-            
+            let vx = Math.cos(ai.angle) * 2.5;
+            let vy = Math.sin(ai.angle) * 2.5;
             if (!checkWallCollision(ai.x + vx, ai.y, ai.hitbox)) ai.x += vx;
             if (!checkWallCollision(ai.x, ai.y + vy, ai.hitbox)) ai.y += vy;
         }
-        // Nếu góc lệch quá nhiều -> Đứng xoay tiếp, không trượt ngang
-        
-        // Vẫn quay súng về phía địch để dọa
-        // (Lưu ý: ưu tiên xoay thân xe để né trước, xoay súng tính sau)
+        // Khi đang né, hủy lệnh đi nhặt đồ để bảo toàn mạng sống
+        ai.forceMoveTarget = null; 
         return; 
     }
 
-    // --- 2. GỠ KẸT (UNSTICK) ---
+    // --- 2. LOGIC SỬ DỤNG VŨ KHÍ ĐẶC BIỆT (SMART WEAPON USAGE) ---
+    // Nếu đang cầm hàng nóng, phải dùng cho đúng cách
+    if (ai.ammo > 0 && ai.weaponType !== 'NORMAL') {
+        let specialized = handleSpecialWeapon(ai, opponent);
+        if (specialized) return; // Nếu đã thực hiện hành động vũ khí, bỏ qua phần di chuyển thường
+    }
+
+    // --- 3. LOGIC GỠ KẸT ---
     if (ai.isStuck) {
         let cellCenter = getCellCenter(ai.x, ai.y);
         moveToPoint(ai, cellCenter.x, cellCenter.y, 2.0);
@@ -131,42 +123,120 @@ function updateAI(ai, opponent) {
         return;
     }
 
-    // --- 3. PRECISION SHOOTING (NGẮM KỸ RỒI MỚI BẮN) ---
-    if (ai.ammo > 0 && ai.cooldownTimer <= 0) {
-        // Tìm góc bắn (bao gồm cả bắn nảy tường)
-        let bestFiringAngle = findBestShot(ai, opponent);
+    // --- 4. THỰC THI LỆNH TỪ API (FETCHING ITEM) ---
+    if (ai.forceMoveTarget) {
+        // Check vật phẩm còn đó không
+        let itemStillThere = powerups.some(p => p.active && Math.abs(p.x - ai.forceMoveTarget.x) < 10 && Math.abs(p.y - ai.forceMoveTarget.y) < 10);
         
-        if (bestFiringAngle !== null) {
-            // Bước 1: Xoay xe về hướng bắn
-            rotateTowards(ai, bestFiringAngle, 0.3); // Tốc độ xoay
+        if (!itemStillThere) {
+            ai.forceMoveTarget = null;
+            ai.aiState = "HUNTING";
+        } else {
+            // [FIX] Kiểm tra khoảng cách tới vật phẩm
+            let distToItem = dist(ai.x, ai.y, ai.forceMoveTarget.x, ai.forceMoveTarget.y);
 
-            // Bước 2: KIỂM TRA ĐỘ LỆCH GÓC (Logic bạn yêu cầu)
-            // Chỉ bắn khi góc nòng súng lệch rất ít so với góc tính toán
-            let angleDiff = Math.abs(normalizeAngle(ai.angle - bestFiringAngle));
-            
-            if (angleDiff < AI_CONFIG.aimTolerance) {
-                ai.shoot(walls);
-                // Bắn xong gán cooldown ngay để tránh spam
-                ai.cooldownTimer = 50; 
+            // NẾU GẦN (< 60px): Lao thẳng, bỏ qua pathfinding, bật forceDrive để không xoay loạn xạ
+            if (distToItem < 60) {
+                moveToPoint(ai, ai.forceMoveTarget.x, ai.forceMoveTarget.y, 2.5, true); 
+            } 
+            // NẾU XA: Dùng A* tìm đường như bình thường
+            else {
+                if (ai.aiPathTimer++ % 15 === 0 || ai.aiCurrentPath.length === 0) {
+                    ai.aiCurrentPath = getAStarPath(ai.x, ai.y, ai.forceMoveTarget.x, ai.forceMoveTarget.y);
+                    ai.aiTargetCell = 0;
+                }
+                followPath(ai);
             }
-            // Nếu chưa thẳng góc -> Return để tiếp tục xoay frame tiếp theo (không di chuyển)
+
+            // Vẫn xoay súng về phía địch để đề phòng
+            // (Đoạn này giữ nguyên hoặc bỏ tùy bạn, nhưng ưu tiên di chuyển là trên hết)
             return; 
         }
     }
 
-    // --- 4. HUNTING (DI CHUYỂN TÌM ĐỊCH) ---
-    // Nếu an toàn và không có góc bắn -> Đi tìm
+    // --- 5. LOGIC SĂN ĐỊCH MẶC ĐỊNH (KHI KHÔNG CÓ LỆNH API) ---
+    if (ai.ammo > 0 && ai.cooldownTimer <= 0) {
+        let bestFiringAngle = findBestShot(ai, opponent);
+        if (bestFiringAngle !== null) {
+            rotateTowards(ai, bestFiringAngle, 0.3);
+            let angleDiff = Math.abs(normalizeAngle(ai.angle - bestFiringAngle));
+            if (angleDiff < AI_CONFIG.aimTolerance) {
+                ai.shoot(walls);
+                ai.cooldownTimer = 20 + Math.random() * 20; 
+            }
+            return; 
+        }
+    }
+
+    // Di chuyển tìm địch
     if (ai.aiPathTimer++ % 30 === 0 || ai.aiCurrentPath.length === 0) {
         ai.aiCurrentPath = getAStarPath(ai.x, ai.y, opponent.x, opponent.y);
         ai.aiTargetCell = 0;
     }
+    followPath(ai);
+}
 
+// --- HÀM BỔ TRỢ MỚI: XỬ LÝ VŨ KHÍ ---
+function handleSpecialWeapon(ai, opponent) {
+    let d = dist(ai.x, ai.y, opponent.x, opponent.y);
+
+    // Lấy thông số từ Personality hiện tại (do API set)
+    const currentMode = AI_PERSONALITY[aiConfig.personality] || AI_PERSONALITY.BALANCED;
+    const stopDist = currentMode.stopDist;
+
+    // 1. LOGIC CHUNG DỰA TRÊN PERSONALITY CỦA API
+    // Nếu API bảo "RUSHER", nó sẽ ép bot lao vào bất kể súng gì (trừ khi quá vô lý)
+    if (aiConfig.personality === 'RUSHER' && d > 150) {
+        moveToPoint(ai, opponent.x, opponent.y, 2.5);
+        // Vừa lao vào vừa bắn nếu góc tốt
+        let angle = Math.atan2(opponent.y - ai.y, opponent.x - ai.x);
+        rotateTowards(ai, angle, 0.2);
+        if (Math.abs(normalizeAngle(ai.angle - angle)) < 0.5) ai.shoot(walls);
+        return true; 
+    }
+
+    // Nếu API bảo "SNIPER" hoặc "CAMPER", nó sẽ giữ khoảng cách
+    if ((aiConfig.personality === 'SNIPER' || aiConfig.personality === 'CAMPER') && d < stopDist) {
+        // Lùi lại hoặc giữ vị trí
+        // (Logic di chuyển lùi phức tạp hơn, ở đây ta đơn giản là không lao lên)
+        // Bot sẽ tự động dùng logic "HUNTING" mặc định của A* để tìm vị trí bắn tốt
+        return false; // Trả về false để logic move mặc định (A*) xử lý việc giữ khoảng cách
+    }
+
+    // 2. LOGIC ĐẶC THÙ VŨ KHÍ (Vẫn giữ để đảm bảo hiệu quả tối thiểu)
+    if (ai.weaponType === 'MINE' && d < 200) {
+        ai.shoot(walls); return false;
+    }
+    
+    if (ai.weaponType === 'SHIELD') {
+         // Logic Shield cũ...
+         for (let b of bullets) {
+            if (!b.dead && b.owner !== ai && dist(ai.x, ai.y, b.x, b.y) < 150) {
+                ai.shoot(walls); return true;
+            }
+        }
+        return false;
+    }
+
+    // LASER/DEATHRAY: Bắn xuyên tường
+    if (ai.weaponType === 'LASER' || ai.weaponType === 'DEATHRAY') {
+        let angle = Math.atan2(opponent.y - ai.y, opponent.x - ai.x);
+        rotateTowards(ai, angle, 0.1);
+        if (Math.abs(normalizeAngle(ai.angle - angle)) < 0.05) ai.shoot(walls);
+        return true; 
+    }
+
+    return false;
+}
+
+// Hàm hỗ trợ đi theo đường dẫn (Tách ra cho gọn)
+function followPath(ai) {
     if (ai.aiCurrentPath.length > 0) {
         let cell = ai.aiCurrentPath[ai.aiTargetCell];
         if (cell) {
             let nextX = cell.x * cellSize + cellSize/2;
             let nextY = cell.y * cellSize + cellSize/2;
-            moveToPoint(ai, nextX, nextY, 2.0); // Tốc độ đi tuần tra là 2.0
+            moveToPoint(ai, nextX, nextY, 2.0); 
             
             if (dist(ai.x, ai.y, nextX, nextY) < 15) {
                 ai.aiTargetCell++;
@@ -174,21 +244,21 @@ function updateAI(ai, opponent) {
             }
         }
     } else {
-        // Fallback: Nếu không có đường đi, hướng mặt về phía địch
-        let angleToEnemy = Math.atan2(opponent.y - ai.y, opponent.x - ai.x);
-        rotateTowards(ai, angleToEnemy, 0.1);
+        // Fallback nếu không có đường
+        if (Math.random() < 0.05) ai.angle += Math.PI/2;
     }
 }
 
 // --- CÁC HÀM LOGIC MỚI CHO AI ---
 
 // Hàm hỗ trợ di chuyển
-function moveToPoint(ai, tx, ty, speed) {
+function moveToPoint(ai, tx, ty, speed, forceDrive = false) {
     let angleToTarget = Math.atan2(ty - ai.y, tx - ai.x);
     rotateTowards(ai, angleToTarget, 0.2);
     
-    // Chỉ đi khi góc lệch không quá lớn (tránh húc đầu vào tường khi quay)
-    if (Math.abs(normalizeAngle(ai.angle - angleToTarget)) < 1.0) {
+    // Logic cũ: Chỉ đi khi góc lệch < 1.0 radian
+    // Logic mới: Nếu forceDrive = true (đang ở rất gần), đi luôn không cần chờ xoay
+    if (forceDrive || Math.abs(normalizeAngle(ai.angle - angleToTarget)) < 1.0) {
         let vx = Math.cos(ai.angle) * speed;
         let vy = Math.sin(ai.angle) * speed;
         
@@ -1130,47 +1200,108 @@ let powerupAiTimer = 0;
 let isPowerupThinking = false;
 
 async function consultPowerupAI(aiTank, enemyTank, availablePowerups) {
-    // Nếu đang suy nghĩ hoặc không có đồ thì thôi
-    if (isPowerupThinking || availablePowerups.length === 0) return;
+    if (isPowerupThinking) return;
     
+    // --- TRƯỜNG HỢP 1: ĐÃ CÓ VŨ KHÍ XỊN -> HỎI CHIẾN THUẬT DÙNG SÚNG ---
+    if (aiTank.weaponType !== 'NORMAL') {
+        isPowerupThinking = true;
+        
+        const distVal = Math.round(dist(aiTank.x, aiTank.y, enemyTank.x, enemyTank.y));
+        const myHp = Math.round(aiTank.hp);
+        const enHp = Math.round(enemyTank.hp);
+
+        // Prompt chuyên sâu về chiến thuật chiến đấu
+        const combatPrompt = `
+        Role: Tank Battle Expert.
+        Context:
+        - Me: HP ${myHp}, Weapon: "${aiTank.weaponType}" (Ammo: ${aiTank.ammo}).
+        - Enemy: HP ${enHp}, Distance: ${distVal}.
+        
+        Weapon Guide:
+        - FLAME/TRIPLE/DRILL/SHIELD: Needs close range (RUSH).
+        - LASER/DEATHRAY/SNIPER: Needs long range/cover (SNIPER/CAMPER).
+        - MINE: Needs to lure enemy (CAMPER/BALANCED).
+        - MISSILE/GATLING: Medium range (BALANCED).
+
+        Task: Select the best COMBAT MODE.
+        Options: 
+        1. RUSHER (Aggressive, close combat)
+        2. SNIPER (Long range, precise)
+        3. CAMPER (Defensive, waiting)
+        4. BALANCED (Normal play)
+
+        Output JSON: {"mode": "RUSHER", "reason": "Short phrase"}
+        `;
+
+        try {
+            const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+                method: "POST",
+                headers: { 
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${GROQ_POWERUP_KEY}`
+                },
+                body: JSON.stringify({
+                    model: "llama-3.1-8b-instant",
+                    messages: [{ role: "user", content: combatPrompt }],
+                    temperature: 0.3, // Thấp để chọn mode chính xác
+                    response_format: { type: "json_object" }
+                })
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                const result = JSON.parse(data.choices[0].message.content);
+                
+                // --- CAN THIỆP SÂU VÀO HÀNH VI BOT ---
+                const newMode = result.mode || "BALANCED";
+                const reason = result.reason || "Attack";
+
+                // Cập nhật tính cách AI ngay lập tức
+                aiConfig.personality = newMode;
+                
+                // Cập nhật text hiển thị
+                window.aiThinkingText = `${aiTank.weaponType} ➤ ${newMode}`;
+                console.log(`[AI WEAPON TACTIC] ${aiTank.weaponType} -> Sets mode to ${newMode} (${reason})`);
+            }
+        } catch (e) {
+            console.warn("Combat AI Error:", e);
+        } finally {
+            isPowerupThinking = false;
+            // Đặt thời gian nghỉ lâu hơn chút vì đã có chiến thuật rồi
+            powerupAiTimer = -200; 
+        }
+        return;
+    }
+
+    // --- TRƯỜNG HỢP 2: ĐANG CẦM SÚNG CÙI (NORMAL) -> HỎI ĐI NHẶT CÁI GÌ ---
+    if (availablePowerups.length === 0) return;
+
     isPowerupThinking = true;
 
-    // ... (Giữ nguyên phần 1: Chuẩn bị dữ liệu candidates) ...
     const candidates = availablePowerups
-        .map((p, index) => {
-            return {
-                id: index,
-                type: p.type,
-                myDist: Math.round(dist(aiTank.x, aiTank.y, p.x, p.y)),
-                enemyDist: Math.round(dist(enemyTank.x, enemyTank.y, p.x, p.y))
-            };
-        })
+        .map((p, index) => ({
+            id: index,
+            type: p.type,
+            x: p.x, 
+            y: p.y,
+            myDist: Math.round(dist(aiTank.x, aiTank.y, p.x, p.y)),
+            enemyDist: Math.round(dist(enemyTank.x, enemyTank.y, p.x, p.y))
+        }))
         .sort((a, b) => a.myDist - b.myDist)
         .slice(0, 3);
-
-    if (candidates.length === 0) { isPowerupThinking = false; return; }
 
     const itemsList = candidates.map(c => 
         `ID:${c.id} | Name:${c.type} | Dist:${c.myDist}`
     ).join('\n');
 
-    // ... (Giữ nguyên phần 2: Prompt và Fetch API) ...
-    const prompt = `
-    Role: Tank Battle Expert.
-    Context: I need a weapon to win.
-    Items available:
+    const lootPrompt = `
+    Role: Scavenger AI.
+    Context: I have NO special weapon. Need one!
+    Items:
     ${itemsList}
     
-    Task: 
-    1. Analyze the items.
-    2. Pick the BEST Item ID.
-    3. Give a short 2-3 word tactic (e.g., "Ambush", "Snipe him", "Rush B", "Trap him").
-
-    Output Format (JSON Only):
-    {
-        "id": number,
-        "tactic": "string"
-    }
+    Task: Pick item closest or strongest.
+    Output JSON: {"id": number, "tactic": "string"}
     `;
 
     try {
@@ -1182,51 +1313,33 @@ async function consultPowerupAI(aiTank, enemyTank, availablePowerups) {
             },
             body: JSON.stringify({
                 model: "llama-3.1-8b-instant",
-                messages: [{ role: "user", content: prompt }],
-                temperature: 0.3,
-                max_tokens: 50,
+                messages: [{ role: "user", content: lootPrompt }],
+                temperature: 0.2,
                 response_format: { type: "json_object" }
             })
         });
 
         if (response.ok) {
             const data = await response.json();
-            const content = data.choices[0].message.content;
-            
-            try {
-                const result = JSON.parse(content);
-                const chosenId = result.id;
-                const tactic = result.tactic || "Attacking";
+            const result = JSON.parse(data.choices[0].message.content);
+            const chosenId = result.id;
+            const tactic = result.tactic || "Get Loot";
 
-                if (chosenId !== undefined) {
-                    const selectedCandidate = candidates.find(c => c.id === chosenId);
-                    if (selectedCandidate) {
-                        aiTank.powerupTargetId = availablePowerups[selectedCandidate.id]; 
-                        window.aiThinkingText = `💡 ${tactic}`; 
-                        console.log(`AI Strategy: ${tactic} (Picked ${selectedCandidate.type})`);
-                    }
+            if (chosenId !== undefined) {
+                const targetItem = candidates.find(c => c.id === chosenId);
+                if (targetItem) {
+                    aiTank.forceMoveTarget = { x: targetItem.x, y: targetItem.y };
+                    aiTank.aiState = "FETCHING"; 
+                    aiConfig.personality = "RUSHER"; // Khi đi nhặt đồ thì phải nhanh (Aggressive)
+                    window.aiThinkingText = `✨ ${tactic}`; 
                 }
-                
-                // [THÊM MỚI] SAU KHI GỌI THÀNH CÔNG -> ĐỢI 5 GIÂY MỚI ĐƯỢC GỌI TIẾP
-                // Logic: 60 frames = 1 giây.
-                // Đặt timer = -300 nghĩa là phải đếm từ -300 lên 90 (ngưỡng gọi lại)
-                // Tổng thời gian chờ = (300 + 90) / 60 = 6.5 giây
-                powerupAiTimer = -300; 
-
-            } catch (parseErr) {
-                console.warn("Lỗi đọc JSON từ AI:", parseErr);
             }
-        } else {
-            // [THÊM MỚI] NẾU API LỖI (VÍ DỤ 429 TOO MANY REQUESTS)
-            // Phạt chờ lâu hơn (10 giây) để server nghỉ ngơi
-            console.warn("API Error, cooling down...");
-            powerupAiTimer = -600;
         }
     } catch (e) {
-        console.warn("Powerup AI Error:", e);
-        powerupAiTimer = -600; // Lỗi mạng cũng chờ 10s
+        console.warn("Loot AI Error:", e);
     } finally {
         isPowerupThinking = false;
+        powerupAiTimer = -300;
     }
 }
 
