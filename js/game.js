@@ -157,14 +157,21 @@ function updateAI(ai, opponent) {
     // --- 5. LOGIC SĂN ĐỊCH MẶC ĐỊNH (KHI KHÔNG CÓ LỆNH API) ---
     if (ai.ammo > 0 && ai.cooldownTimer <= 0) {
         let bestFiringAngle = findBestShot(ai, opponent);
+        
         if (bestFiringAngle !== null) {
+            // Xoay từ từ về hướng bắn tốt nhất
             rotateTowards(ai, bestFiringAngle, 0.3);
+            
+            // Chỉ bắn khi nòng súng đã rất thẳng hàng (giảm sai số xuống 0.03)
             let angleDiff = Math.abs(normalizeAngle(ai.angle - bestFiringAngle));
-            if (angleDiff < AI_CONFIG.aimTolerance) {
+            
+            // [FIX] Bỏ logic random bắn, chỉ bắn khi đã ngắm chuẩn
+            if (angleDiff < 0.03) { 
                 ai.shoot(walls);
-                ai.cooldownTimer = 20 + Math.random() * 20; 
+                // Đặt thời gian hồi chiêu ngẫu nhiên để trông tự nhiên hơn, nhưng không bắn liên thanh
+                ai.cooldownTimer = 25 + Math.random() * 15; 
             }
-            return; 
+            return; // Đang ngắm bắn thì đứng yên hoặc di chuyển rất chậm
         }
     }
 
@@ -283,16 +290,19 @@ function getCellCenter(x, y) {
 // Logic "23 Raycasts in a 230 degree arc"
 // --- THUẬT TOÁN NGẮM BẮN CHÍNH XÁC ---
 function findBestShot(ai, target) {
-    let startAngle = ai.angle - (AI_CONFIG.viewAngle / 2);
-    let step = AI_CONFIG.viewAngle / AI_CONFIG.rayCount;
-    
-    // Ưu tiên bắn thẳng trước (kiểm tra tia chính giữa)
+    // 1. Kiểm tra bắn thẳng (Direct Shot) - Ưu tiên số 1
     let directAngle = Math.atan2(target.y - ai.y, target.x - ai.x);
+    // Bắn thẳng không cần nảy (0 bounces) để tiết kiệm thời gian bay
     if (simulateShot(ai.x, ai.y, directAngle, target, 0, ai)) return directAngle;
 
-    // Nếu không bắn thẳng được, quét tia tìm góc nảy
-    // Quét từ tâm ra 2 bên để ưu tiên góc quay ngắn nhất
-    for (let i = 0; i < AI_CONFIG.rayCount / 2; i++) {
+    // 2. Nếu không bắn thẳng được, quét tia để tìm góc nảy (Ricochet)
+    let startAngle = ai.angle - (AI_CONFIG.viewAngle / 2);
+    // Tăng độ mịn của tia quét (step nhỏ lại) để tìm đường đạn chính xác hơn
+    let rayCount = 40; 
+    let step = AI_CONFIG.viewAngle / rayCount;
+
+    // Quét từ tâm ra 2 bên (để tìm đường ngắn nhất trước)
+    for (let i = 1; i <= rayCount / 2; i++) {
         // Tia bên phải
         let a1 = ai.angle + i * step;
         if (simulateShot(ai.x, ai.y, a1, target, 1, ai)) return a1;
@@ -301,60 +311,61 @@ function findBestShot(ai, target) {
         let a2 = ai.angle - i * step;
         if (simulateShot(ai.x, ai.y, a2, target, 1, ai)) return a2;
     }
-    return null;
+
+    return null; // Không tìm thấy góc bắn an toàn nào
 }
 
 // --- CẬP NHẬT HÀM MÔ PHỎNG ĐẠN (AN TOÀN CAO) ---
 function simulateShot(x, y, angle, target, maxBounces, shooter) {
-    let simX = x + Math.cos(angle) * 20; // Bắt đầu từ đầu nòng súng (tránh nổ ngay tại chỗ)
-    let simY = y + Math.sin(angle) * 20;
+    // Bắt đầu mô phỏng từ đầu nòng súng (cách tâm 25px)
+    let simX = x + Math.cos(angle) * 25; 
+    let simY = y + Math.sin(angle) * 25;
     
-    // Kiểm tra ngay đầu nòng xem có kẹt tường không
+    // Nếu nòng súng đang kẹt trong tường thì không bắn
     if (checkWallCollision(simX, simY, 5)) return false;
 
-    let simVx = Math.cos(angle) * 12; // Tốc độ mô phỏng (nhanh hơn đạn thật để check lẹ)
+    let simVx = Math.cos(angle) * 12; // Tốc độ mô phỏng nhanh
     let simVy = Math.sin(angle) * 12;
     let bounces = 0;
 
-    for (let i = 0; i < 150; i++) { // Tăng tầm dự đoán lên xa hơn
+    // Tăng số bước dự đoán lên 200 (để tính toán các pha nảy xa)
+    for (let i = 0; i < 200; i++) { 
         simX += simVx;
         simY += simVy;
 
-        // 1. Check trúng địch
-        if (dist(simX, simY, target.x, target.y) < 20) return true;
+        // --- 1. KIỂM TRA TỰ SÁT (QUAN TRỌNG NHẤT) ---
+        // Nếu đạn đã nảy (bounces > 0) mà quay lại gần Bot trong phạm vi 55px -> KHÔNG BẮN
+        if (bounces > 0) {
+            let distToMe = dist(simX, simY, shooter.x, shooter.y);
+            if (distToMe < 55) return false; // Quá nguy hiểm, hủy bắn
+        }
 
-        // 2. Check va chạm tường
+        // --- 2. KIỂM TRA TRÚNG ĐỊCH ---
+        if (dist(simX, simY, target.x, target.y) < 25) {
+            // Nếu trúng địch, trả về TRUE (Góc bắn tốt)
+            return true;
+        }
+
+        // --- 3. KIỂM TRA VA CHẠM TƯỜNG ---
         if (checkWallCollision(simX, simY, 4)) {
-            if (bounces >= maxBounces) return false;
+            if (bounces >= maxBounces) return false; // Hết lượt nảy -> Trượt
             
-            // Phản xạ vector
-            simX -= simVx; simY -= simVy; // Lùi lại bước trước khi va chạm
+            // Xử lý nảy (Reflect Vector)
+            simX -= simVx; 
+            simY -= simVy; // Lùi lại 1 bước
             
-            // Check xem va cạnh ngang hay dọc
-            if (checkWallCollision(simX + simVx, simY, 4)) simVx = -simVx;
-            else simVy = -simVy;
+            // Kiểm tra xem va cạnh ngang hay dọc để đảo chiều
+            if (checkWallCollision(simX + simVx, simY, 4)) {
+                simVx = -simVx; // Đảo chiều X
+            } else {
+                simVy = -simVy; // Đảo chiều Y
+            }
             
             bounces++;
         }
-
-        // 3. [QUAN TRỌNG] Check tự sát
-        if (bounces > 0) {
-            let distToMe = dist(simX, simY, shooter.x, shooter.y);
-            
-            // Nếu đạn quay lại quá gần (Vùng chết chóc) -> HỦY NGAY
-            if (distToMe < 45) return false; 
-
-            // Logic nâng cao: Nếu đạn đang bay VỀ PHÍA MÌNH (Vector hướng về tâm)
-            // Tính Dot Product giữa vận tốc đạn và vector từ đạn tới xe
-            let toShooterX = shooter.x - simX;
-            let toShooterY = shooter.y - simY;
-            let dot = simVx * toShooterX + simVy * toShooterY;
-            
-            // Nếu đạn đang lao tới mình (dot > 0) và khoảng cách < 80 -> Quá rủi ro -> BỎ
-            if (dot > 0 && distToMe < 80) return false;
-        }
     }
-    return false;
+
+    return false; // Hết đường đạn mà không trúng ai
 }
 
 // --- THUẬT TOÁN NÉ ĐẠN CAO CẤP (GOD MODE) ---
