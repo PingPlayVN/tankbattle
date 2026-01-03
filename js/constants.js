@@ -48,8 +48,8 @@ const controls = {
 
 // AI Config
 const AI_DIFFICULTY = {
-    EASY: { reaction: 8, aimErr: 0.02, moveSpeed: 2, bounces: 2 },
-    HARD: { reaction: 0, aimErr: 0.0, moveSpeed: 2, bounces: 3 }
+    EASY: { reaction: 8, aimErr: 0.02, moveSpeed: 1, bounces: 2 },
+    HARD: { reaction: 0, aimErr: 0.0, moveSpeed: 1, bounces: 3 }
 };
 
 const AI_PERSONALITY = {
