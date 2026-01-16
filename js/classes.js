@@ -125,19 +125,24 @@ class PowerUp {
 class LaserBeam {
     constructor(x, y, angle, owner, life = 90) {
         this.start = {x: x, y: y};
-        let wType = owner ? owner.weaponType : 'LASER';
-        let len = 3000; if (wType === 'DEATHRAY') len = 280; 
+        // Lưu loại vũ khí để phân biệt Laser thường và Death Ray
+        this.type = owner ? owner.weaponType : 'LASER';
+        
+        let len = 3000; if (this.type === 'DEATHRAY') len = 280; 
         this.end = { x: x + Math.cos(angle) * len, y: y + Math.sin(angle) * len };
         this.owner = owner; this.life = life; this.maxLife = life; this.active = true;
         
-        if (wType === 'DEATHRAY') this.color = WEAPONS.DEATHRAY.color;
+        if (this.type === 'DEATHRAY') this.color = WEAPONS.DEATHRAY.color;
         else if (owner && owner.color) this.color = owner.color; 
         else this.color = WEAPONS.LASER.color;
 
         this.angle = angle;
         this.curveTarget = null;
         
-        if (owner && wType === 'LASER') { 
+        // [QUAN TRỌNG] Danh sách các mục tiêu đã bị trúng (cho Laser thường)
+        this.hitTargets = [];
+        
+        if (owner && this.type === 'LASER') { 
             let potentialTargets = [p1, p2];
             for(let t of potentialTargets) {
                 if (t === owner || t.dead) continue;
@@ -157,14 +162,33 @@ class LaserBeam {
 
         const checkHit = (tank) => {
             if (!tank.dead && this.owner !== tank) {
-                if (this.curveTarget === tank) { 
-                    if (tank.activeShield) { createSparks(tank.x, tank.y, "#fff", 5); return; }
-                    tank.takeDamage(this.owner, null); return; 
-                }
-                let d = distToSegment({x: tank.x, y: tank.y}, this.start, this.end);
-                if (d < 25) { 
-                    if (tank.activeShield) { createSparks(tank.x, tank.y, this.color, 3); createSparks(tank.x, tank.y, "#ffffff", 2); return; }
-                    tank.takeDamage(this.owner, null); 
+                // Logic va chạm
+                let isHit = false;
+                if (this.curveTarget === tank) isHit = true;
+                else if (distToSegment({x: tank.x, y: tank.y}, this.start, this.end) < 25) isHit = true;
+
+                if (isHit) {
+                    // Xử lý khiên
+                    if (tank.activeShield) { 
+                        createSparks(tank.x, tank.y, this.color, 3); 
+                        createSparks(tank.x, tank.y, "#ffffff", 2); 
+                        return; 
+                    }
+                    
+                    // --- XỬ LÝ SÁT THƯƠNG (GIỮ NGUYÊN) ---
+                    if (this.type === 'DEATHRAY') {
+                        // DeathRay: Gây damage liên tục mỗi frame (Rỉa máu)
+                        tank.takeDamage(this.owner, null, 'DEATHRAY'); 
+                        if(Math.random() < 0.3) createSparks(tank.x, tank.y, this.color, 1);
+                    } 
+                    else {
+                        // Normal Laser: Chỉ gây damage 1 lần duy nhất cho mỗi tia
+                        if (!this.hitTargets.includes(tank)) {
+                            tank.takeDamage(this.owner, null, 'LASER');
+                            this.hitTargets.push(tank);
+                            createExplosion(tank.x, tank.y, this.color, false);
+                        }
+                    }
                 }
             }
         };
@@ -228,12 +252,8 @@ class Bullet {
 
     updateVisuals(dt = 1) {
         if (this.type === 'missile') {
-            // [FIX] Client liên tục reset đối tượng đạn, nên timer không hoạt động.
-            // Sử dụng xác suất ngẫu nhiên (40%) để tạo khói, tạo hiệu ứng tương tự timer.
             if (Math.random() < 0.4) { 
                 let smokeColor = this.lockedTargetColor ? this.lockedTargetColor : '#444';
-                // Nếu là Client, lockedTargetColor có thể không được sync, dùng tạm màu đạn
-                
                 particles.push(new Particle(
                     this.x - Math.cos(this.angle) * 5, 
                     this.y - Math.sin(this.angle) * 5, 
@@ -414,10 +434,7 @@ class Tank {
         this.startX=x; this.startY=y; this.color=color; this.name=name; this.ctrls=ctrls; this.uiId=uiId;
         this.pKey = name === "P1" ? "p1" : "p2"; 
         this.isAI = isAI;
-        
-        // [FIX] Cờ xác định xe này được điều khiển qua mạng
         this.isNetworkControlled = false; 
-        
         this.lastTrackX = x; this.lastTrackY = y;
         this.reset();
         this.targetX = x; this.targetY = y;
@@ -431,7 +448,12 @@ class Tank {
         this.activeShield = false; this.shieldTimer = 0;
         this.cachedAmmo = -1; this.cachedWeapon = '';
         
-        // [FIX] Đặt lại vận tốc về 0
+        // --- [MỚI] BIẾN CHO TỤ LỰC LASER ---
+        this.isCharging = false;
+        this.chargeTimer = 0;
+        this.maxChargeTime = 0;
+        // -----------------------------------
+
         this.currentVx = 0; 
         this.currentVy = 0;
         
@@ -459,7 +481,14 @@ class Tank {
         }
     }
 
-    setWeapon(type) { this.weaponType = type; this.ammo = WEAPONS[type].ammo; this.maxAmmo = WEAPONS[type].ammo; this.cooldownTimer=0; }
+    setWeapon(type) { 
+        this.weaponType = type; 
+        this.ammo = WEAPONS[type].ammo; 
+        this.maxAmmo = WEAPONS[type].ammo; 
+        this.cooldownTimer=0; 
+        // Reset trạng thái tụ lực khi đổi súng
+        this.isCharging = false; 
+    }
     
     updateHPUI() {
         let barId = (this.name === "P1") ? "hp-p1" : "hp-p2";
@@ -473,7 +502,8 @@ class Tank {
         }
     }
 
-    takeDamage(killer, bullet) {
+    // [CẬP NHẬT] Thêm tham số specificWeaponType để xử lý damage chính xác
+    takeDamage(killer, bullet, specificWeaponType = null) {
         if (this.dead || roundEnding) return; 
         
         if (this.activeShield) {
@@ -487,7 +517,14 @@ class Tank {
 
         if (typeof isDeathmatch !== 'undefined' && isDeathmatch) {
             let damage = 20; 
-            if (bullet) {
+            
+            // [LOGIC MỚI] Ưu tiên lấy damage từ loại vũ khí cụ thể nếu được truyền vào
+            if (specificWeaponType) {
+                damage = DAMAGE_TABLE[specificWeaponType] || 20;
+                // Hiệu ứng trúng đạn cho Laser/Deathray
+                createHitEffect(this.x, this.y, killer ? killer.color : "#fff");
+            } 
+            else if (bullet) {
                 let typeKey = 'NORMAL';
                 if(bullet.type === 'mini') typeKey = 'GATLING';
                 else if(bullet.type === 'missile') typeKey = 'MISSILE';
@@ -498,7 +535,8 @@ class Tank {
                 damage = DAMAGE_TABLE[typeKey] || 20;
                 createHitEffect(this.x, this.y, this.color);
                 bullet.dead = true; 
-            } else { damage = DAMAGE_TABLE.LASER; createHitEffect(this.x, this.y, "#fff"); }
+            } 
+            
             this.hp -= damage; this.updateHPUI();
             if (this.hp > 0) return; 
         }
@@ -546,15 +584,10 @@ class Tank {
         }
     }
 
-    // [FIX] Hàm nhận input từ mạng và chuyển thành vận tốc
     overrideInput(input) {
         if (!input) return;
-
-        // 1. Góc xoay
         if (input.left) this.angle -= 0.05; 
         if (input.right) this.angle += 0.05;
-
-        // 2. Tốc độ
         let spd = 0;
         if (input.up) spd = 2; 
         else if (input.down) spd = -2;
@@ -567,7 +600,6 @@ class Tank {
             this.currentVy = 0;
         }
 
-        // 3. Bắn
         if (input.shoot) {
             if (!this.needsTriggerReset) this.shoot(walls);
         } else {
@@ -587,6 +619,8 @@ class Tank {
         if(this.dead) return;
         if(this.cooldownTimer>0) this.cooldownTimer -= 1 * dt;
         if (this.activeShield) { this.shieldTimer -= 1 * dt; if (this.shieldTimer <= 0) { this.activeShield = false; } }
+        
+        // --- LOGIC XOAY TRÒN (DeathRay) ---
         if (this.spinning) {
             this.angle += 0.01 * dt; this.spinTimer -= 1 * dt;
             activeLasers.push(new LaserBeam(this.x, this.y, this.angle, this, 2)); activeLasers.push(new LaserBeam(this.x, this.y, this.angle + Math.PI, this, 2));
@@ -594,32 +628,76 @@ class Tank {
             if (this.spinTimer <= 0) { this.spinning = false; this.setWeapon('NORMAL'); this.needsTriggerReset = true; }
             return;
         }
+
+        // --- LOGIC TỤ LỰC LASER (CHARGING) ---
+        if (this.isCharging) {
+            this.chargeTimer -= 1 * dt;
+            
+            // 1. Tạo hiệu ứng hút năng lượng (Shockwave ngược)
+            if (Math.floor(this.chargeTimer) % 5 === 0) {
+                 let angle = Math.random() * Math.PI * 2;
+                 let dist = 30;
+                 let px = this.x + Math.cos(angle) * dist;
+                 let py = this.y + Math.sin(angle) * dist;
+                 // Hút vào tâm
+                 let p = new Particle(px, py, 'spark', WEAPONS.LASER.color);
+                 p.vx = -Math.cos(angle) * 2;
+                 p.vy = -Math.sin(angle) * 2;
+                 p.life = 15; 
+                 particles.push(p);
+            }
+
+            // 2. Khi tụ lực xong -> BẮN
+            if (this.chargeTimer <= 0) {
+                this.isCharging = false;
+                
+                // Bắn Laser thật sự
+                activeLasers.push(new LaserBeam(this.x, this.y, this.angle, this)); 
+                shakeAmount = 15; 
+                this.cooldownTimer = WEAPONS.LASER.cooldown;
+                
+                // Hiệu ứng nổ khi bắn ra
+                createExplosion(this.x, this.y, WEAPONS.LASER.color, false);
+                
+                this.ammo--; 
+            }
+        }
         
         if(this.weaponType==='NORMAL' && this.ammo<this.maxAmmo) { this.reloadTimer += 1 * dt; if(this.reloadTimer>=RELOAD_TIME){ this.ammo++; this.reloadTimer=0; } } else this.reloadTimer=0;
-        if(this.weaponType!=='NORMAL' && this.ammo<=0) { this.setWeapon('NORMAL'); this.needsTriggerReset = true; }
+        if(this.weaponType!=='NORMAL' && this.ammo<=0 && !this.isCharging) { this.setWeapon('NORMAL'); this.needsTriggerReset = true; }
 
-        // [FIX] CHỈ ĐỌC PHÍM NẾU KHÔNG PHẢI AI VÀ KHÔNG PHẢI NETWORK
+        // --- INPUT LOGIC (ĐÃ SỬA) ---
         if (!this.isAI && !this.isNetworkControlled) {
-            let spd = 0; let firing = false;
-            if (isMobile) {
-                let input = this.pKey === 'p1' ? mobileInput.p1 : mobileInput.p2;
-                if (Math.abs(input.x) > 0.1 || Math.abs(input.y) > 0.1) {
-                     let targetAngle = Math.atan2(input.y, input.x);
-                     let diff = targetAngle - this.angle;
-                     while(diff < -Math.PI) diff += Math.PI*2; while(diff > Math.PI) diff -= Math.PI*2;
-                     let sens = mobileSettings[this.pKey].sensitivity;
-                     this.angle += Math.sign(diff) * Math.min(Math.abs(diff), 0.1 * sens * dt); 
-                     spd = 2; 
+            let spd = 0; 
+            let firing = false;
+
+            // [FIX] Chỉ cho phép di chuyển và xoay nếu KHÔNG ĐANG TỤ LỰC
+            if (!this.isCharging) {
+                if (isMobile) {
+                    let input = this.pKey === 'p1' ? mobileInput.p1 : mobileInput.p2;
+                    if (Math.abs(input.x) > 0.1 || Math.abs(input.y) > 0.1) {
+                         let targetAngle = Math.atan2(input.y, input.x);
+                         let diff = targetAngle - this.angle;
+                         while(diff < -Math.PI) diff += Math.PI*2; while(diff > Math.PI) diff -= Math.PI*2;
+                         let sens = mobileSettings[this.pKey].sensitivity;
+                         this.angle += Math.sign(diff) * Math.min(Math.abs(diff), 0.1 * sens * dt); 
+                         spd = 2; 
+                    }
+                } else {
+                    let c = controls[this.pKey];
+                    if(keys[c.left]) this.angle -= 0.05 * dt; if(keys[c.right]) this.angle += 0.05 * dt;
+                    if(keys[c.up]) spd = 2; else if(keys[c.down]) spd = -2;
                 }
-                if (input.fire) firing = true;
-            }  else {
-                let c = controls[this.pKey];
-                if(keys[c.left]) this.angle -= 0.05 * dt; if(keys[c.right]) this.angle += 0.05 * dt;
-                if(keys[c.up]) spd = 2; else if(keys[c.down]) spd = -2;
-                if (keys[c.shoot]) firing = true;
+            }
+
+            // Xử lý nút bắn (vẫn cho phép bấm để kích hoạt, nhưng di chuyển thì đã bị chặn ở trên)
+            if (isMobile) {
+                if (this.pKey === 'p1' ? mobileInput.p1.fire : mobileInput.p2.fire) firing = true;
+            } else {
+                if (keys[controls[this.pKey].shoot]) firing = true;
             }
             
-            // Tính vận tốc từ input cục bộ
+            // Tính toán vận tốc (Nếu isCharging thì spd luôn là 0 do đoạn code chặn ở trên)
             if (spd !== 0) {
                 this.currentVx = Math.cos(this.angle)*spd; 
                 this.currentVy = Math.sin(this.angle)*spd;
@@ -632,12 +710,56 @@ class Tank {
             if (firing) this.shoot(walls);
         }
         
-        // [FIX] LOGIC VẬT LÝ DI CHUYỂN (ÁP DỤNG CHO TẤT CẢ)
-        // Network Controlled xe đã có currentVx/Vy từ overrideInput
+        // --- KHÓA DI CHUYỂN KHI ĐANG TỤ LỰC (BẢO HIỂM THÊM) ---
+        if (this.isCharging) {
+            this.currentVx = 0;
+            this.currentVy = 0;
+            // Angle giữ nguyên, không thay đổi
+        }
+        
         if(this.currentVx !== 0 || this.currentVy !== 0) {
             if(!checkWallCollision(this.x + this.currentVx * dt, this.y, this.hitbox)) { this.x += this.currentVx * dt; }
             if(!checkWallCollision(this.x, this.y + this.currentVy * dt, this.hitbox)) { this.y += this.currentVy * dt; }
             this.drawTracks();
+        }
+
+        if (typeof isDeathmatch !== 'undefined' && isDeathmatch && !this.dead) {
+            let hpPercent = this.hp / MAX_HP; // Tính % máu còn lại
+
+            // 1. Máu dưới 60%: Bắt đầu bốc khói xám nhẹ
+            if (hpPercent < 0.6) {
+                // Random để khói không ra quá dày, máu càng thấp khói càng nhiều
+                if (Math.random() < 0.05 + (0.6 - hpPercent) * 0.1) {
+                    let ox = (Math.random() - 0.5) * 14; // Lệch vị trí ngẫu nhiên
+                    let oy = (Math.random() - 0.5) * 14;
+                    // Tạo particle khói màu xám
+                    particles.push(new Particle(this.x + ox, this.y + oy, 'smoke', '#888'));
+                }
+            }
+
+            // 2. Máu dưới 30%: Bốc khói đen và Lửa
+            if (hpPercent < 0.3) {
+                // Khói đen đậm hơn
+                if (Math.random() < 0.08) {
+                    let ox = (Math.random() - 0.5) * 14;
+                    let oy = (Math.random() - 0.5) * 14;
+                    particles.push(new Particle(this.x + ox, this.y + oy, 'smoke', '#222'));
+                }
+                // Thỉnh thoảng bốc lửa
+                if (Math.random() < 0.04) {
+                    let ox = (Math.random() - 0.5) * 10;
+                    let oy = (Math.random() - 0.5) * 10;
+                    particles.push(new Particle(this.x + ox, this.y + oy, 'fire', '#ff5722'));
+                }
+            }
+            
+            // 3. Máu dưới 15%: Chập điện (Tia lửa điện)
+            if (hpPercent < 0.15) {
+                 if (Math.random() < 0.05) {
+                    // Tận dụng hàm createSparks có sẵn
+                    createSparks(this.x, this.y, "#ffff00", 1);
+                 }
+            }
         }
 
         for(let p of powerups) {
@@ -647,21 +769,31 @@ class Tank {
                 p.active = false; this.setWeapon(p.type); createHitEffect(this.x,this.y);
             }
         }
-
-        if (typeof isDeathmatch !== 'undefined' && isDeathmatch && !this.dead) {
-            if (this.hp <= 50 && this.hp > 20) { if (Math.random() < 0.1) particles.push(new Particle(this.x + (Math.random()-0.5)*10, this.y + (Math.random()-0.5)*10, 'smoke', '#555')); }
-            else if (this.hp <= 20) { if (Math.random() < 0.2) particles.push(new Particle(this.x, this.y, 'fire', '#ff5722')); if (Math.random() < 0.2) particles.push(new Particle(this.x, this.y, 'smoke', '#222')); }
-        }
     }
+
     drawTracks() {
         this.trackTimer++; if (this.trackTimer % 8 === 0) { tracks.push(new TrackMark(this.x, this.y, this.angle)); }
     }
+
     shoot(walls) {
-        if(this.dead || this.ammo<=0 || this.cooldownTimer>0) return;
+        // [FIX] Nếu đang tụ lực hoặc đang cooldown thì không làm gì cả
+        if(this.dead || this.ammo<=0 || this.cooldownTimer>0 || this.isCharging) return;
+
         if (this.weaponType === 'SHIELD') {
             this.activeShield = true; this.shieldTimer = 5 * 60; this.setWeapon('NORMAL'); this.ammo = 5; this.cachedAmmo = -1; 
             this.needsTriggerReset = true; createSparks(this.x, this.y, "#fff", 30); return; 
         }
+        
+        // --- [MỚI] LOGIC KÍCH HOẠT TỤ LỰC LASER ---
+        if (this.weaponType === 'LASER') {
+            this.isCharging = true;
+            this.maxChargeTime = 180; // Thời gian tụ lực (khoảng 0.6 giây)
+            this.chargeTimer = this.maxChargeTime;
+            // Chưa trừ đạn vội, đợi tụ xong mới trừ
+            return;
+        }
+        // ------------------------------------------
+
         if (this.weaponType === 'MINE') {
             let mx = this.x - Math.cos(this.angle) * 26; let my = this.y - Math.sin(this.angle) * 26;
             if (checkWall(mx, my, 8)) return; 
@@ -671,12 +803,10 @@ class Tank {
 
         let muzzleDist = 20; let tipX = this.x + Math.cos(this.angle) * muzzleDist; let tipY = this.y + Math.sin(this.angle) * muzzleDist;
         let midX = this.x + Math.cos(this.angle) * (muzzleDist/2); let midY = this.y + Math.sin(this.angle) * (muzzleDist/2);
-        let ignoreWallBlock = (this.weaponType === 'DEATHRAY' || this.weaponType === 'LASER' || this.weaponType === 'FLAME');
+        let ignoreWallBlock = (this.weaponType === 'DEATHRAY' || this.weaponType === 'FLAME');
         if (!ignoreWallBlock) { if(checkWallCollision(tipX, tipY, 2) || checkWallCollision(midX, midY, 2)) { createSparks(tipX, tipY, "#888", 5); return; } }
 
-        if(this.weaponType === 'LASER') {
-            activeLasers.push(new LaserBeam(this.x, this.y, this.angle, this)); shakeAmount = 10; this.cooldownTimer = WEAPONS.LASER.cooldown; 
-        } else if (this.weaponType === 'DEATHRAY') {
+        if (this.weaponType === 'DEATHRAY') {
             this.spinning = true; this.spinTimer = 314; 
         } else if(this.weaponType === 'TRIPLE') {
             let spread = 0.26; 
@@ -706,6 +836,7 @@ class Tank {
         }  
         if (this.weaponType !== 'DEATHRAY') this.ammo--;
     }
+
     draw() {
         if(this.dead) return;
         ctx.fillStyle="#fff"; ctx.font="bold 10px Arial"; ctx.textAlign="center"; ctx.fillText(this.name, this.x, this.y-28);
@@ -714,11 +845,42 @@ class Tank {
             ctx.fillStyle=this.color; ctx.fillRect(this.x-12,this.y-24,24*(this.reloadTimer/RELOAD_TIME),4); 
             ctx.strokeStyle="#000"; ctx.lineWidth=1; ctx.strokeRect(this.x-12.5,this.y-24.5,25,5);
         }
+        
         ctx.save(); ctx.translate(this.x, this.y); 
+        
+        // --- [MỚI] VẼ HIỆU ỨNG TỤ LỰC (SHOCKWAVE CHARGING) ---
+        if (this.isCharging) {
+            let progress = 1 - (this.chargeTimer / this.maxChargeTime); // 0 -> 1
+            let radius = 40 * (1 - progress); // Vòng tròn thu nhỏ dần từ 40px về 0px
+            
+            // Vẽ vòng tròn năng lượng
+            ctx.beginPath();
+            ctx.arc(0, 0, radius, 0, Math.PI * 2);
+            ctx.strokeStyle = WEAPONS.LASER.color;
+            ctx.lineWidth = 2 + progress * 3; // Càng vào trong càng đậm
+            ctx.stroke();
+
+            // Vẽ hào quang mờ
+            ctx.beginPath();
+            ctx.arc(0, 0, radius + 5, 0, Math.PI * 2);
+            ctx.strokeStyle = `rgba(0, 255, 255, ${0.5 * (1-progress)})`;
+            ctx.lineWidth = 1;
+            ctx.stroke();
+            
+            // Vẽ tâm sáng lên
+            if (radius < 10) {
+                 ctx.fillStyle = "#fff";
+                 ctx.beginPath(); ctx.arc(0, 0, (10-radius), 0, Math.PI*2); ctx.fill();
+            }
+        }
+        // -----------------------------------------------------
+
         if (this.activeShield) { 
             ctx.strokeStyle = "#fff"; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(0,0,24,0,Math.PI*2); ctx.stroke(); 
             ctx.fillStyle = "rgba(255,255,255,0.1)"; ctx.fill();
         }
+        
+        // ... (Giữ nguyên phần vẽ thân xe và súng) ...
         ctx.rotate(this.angle);
         ctx.shadowColor="rgba(0,0,0,0.5)"; ctx.shadowBlur=6; ctx.shadowOffsetY=3;
         ctx.fillStyle = "#222"; ctx.fillRect(-14, -14, 28, 8); ctx.fillStyle = "#111"; for(let i=-12; i<12; i+=4) ctx.fillRect(i, -14, 2, 8);
@@ -727,6 +889,8 @@ class Tank {
         ctx.fillStyle = this.color; ctx.beginPath(); ctx.moveTo(-10, -5); ctx.lineTo(10, -5); ctx.lineTo(12, 0); ctx.lineTo(10, 5); ctx.lineTo(-10, 5); ctx.closePath(); ctx.fill();
         let recoil = 0;
         if(this.weaponType === 'NORMAL' && this.reloadTimer < 5) recoil = this.reloadTimer;
+        // Hiệu ứng giật nhẹ khi đang tụ lực
+        if(this.isCharging) recoil = Math.random() * 1.5; 
         if(this.weaponType === 'GATLING' && this.cooldownTimer > 0) recoil = Math.random() * 2;
         ctx.save(); ctx.translate(-recoil, 0); 
         drawTurret(ctx, this.weaponType, this.color);
@@ -859,13 +1023,29 @@ class Barrel {
         [p1, p2].forEach(p => {
             if (!p.dead && dist(this.x, this.y, p.x, p.y) < range) {
                 let angle = Math.atan2(p.y - this.y, p.x - this.x);
-                p.x += Math.cos(angle) * 20; p.y += Math.sin(angle) * 20;
+                
+                // [FIX] LOGIC ĐẨY LÙI AN TOÀN (ANTI-STUCK)
+                let pushSteps = 5; 
+                let pushDistPerStep = 4; 
+
+                for(let k=0; k < pushSteps; k++) {
+                    let nextX = p.x + Math.cos(angle) * pushDistPerStep;
+                    let nextY = p.y + Math.sin(angle) * pushDistPerStep;
+
+                    if (!checkWallCollision(nextX, p.y, p.hitbox)) {
+                        p.x = nextX;
+                    }
+                    if (!checkWallCollision(p.x, nextY, p.hitbox)) {
+                        p.y = nextY;
+                    }
+                }
+                
                 p.hp -= dmg; p.updateHPUI();
                 if (p.hp <= 0) p.takeDamage(null, null); 
             }
         });
         
-        // [FIX] Sử dụng window.destroyWall thay vì gọi trực tiếp để tránh lỗi scope
+        // Sử dụng window.destroyWall thay vì gọi trực tiếp để tránh lỗi scope
         for (let i = walls.length - 1; i >= 0; i--) {
             let w = walls[i]; let wx = w.x + w.w / 2; let wy = w.y + w.h / 2;
             if (dist(this.x, this.y, wx, wy) < range - 20) { 

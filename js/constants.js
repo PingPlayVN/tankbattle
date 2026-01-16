@@ -95,8 +95,8 @@ const DAMAGE_TABLE = {
     DRILL: 35,      
     MISSILE: 50,    
     MINE: 75,       
-    LASER: 100,     
-    DEATHRAY: 100   
+    LASER: 75,     
+    DEATHRAY: 2   
 };
 
 const DEFAULT_DROP_RATES = {

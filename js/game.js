@@ -76,6 +76,12 @@ const AI_CONFIG = {
 
 function updateAI(ai, opponent) {
     if (ai.dead) return; 
+    
+    if (ai.isCharging) {
+        ai.currentVx = 0;
+        ai.currentVy = 0;
+        return; 
+    }
 
     // --- 0. GỌI API CHIẾN THUẬT ---
     if (!ai.strategyTimer) ai.strategyTimer = 0;
