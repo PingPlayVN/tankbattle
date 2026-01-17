@@ -1234,7 +1234,7 @@ window.createExplosion = createExplosion;
 window.createHitEffect = createHitEffect;
 
 // CẤU HÌNH Groq
-const GROQ_API_KEY = "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"; 
+const GROQ_API_KEY = "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"; 
 
 // Cấu hình Groq - Dùng model Llama 3.1 mới nhất cho ổn định
 const AI_URL = "https://api.groq.com/openai/v1/chat/completions";
@@ -1338,7 +1338,7 @@ async function consultAI(aiTank, enemyTank) {
     }
 }
 
-const GROQ_POWERUP_KEY = "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"; 
+const GROQ_POWERUP_KEY = "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"; 
 
 let powerupAiTimer = 0;
 let isPowerupThinking = false;
@@ -1518,4 +1518,5 @@ async function updateAiPersonality(aiHP, playerHP) {
             }
         }
     } catch (e) {}
+
 }
