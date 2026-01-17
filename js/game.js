@@ -1236,7 +1236,7 @@ window.createHitEffect = createHitEffect;
 // --- [BẢO MẬT] CẤU HÌNH API MỚI ---
 // Đã ẩn API Key. Game sẽ gọi qua Server trung gian.
 // Hãy chạy: node server.js trong thư mục server/
-const AI_SERVER_URL = "http://localhost:3000/api/ask-ai"; 
+const AI_SERVER_URL = "https://tankbattle-server.onrender.com"; 
 const MODEL_NAME = "llama-3.1-8b-instant";
 
 let aiTimer = 0; 
@@ -1473,4 +1473,5 @@ async function updateAiPersonality(aiHP, playerHP) {
             }
         }
     } catch (e) {}
+
 }
