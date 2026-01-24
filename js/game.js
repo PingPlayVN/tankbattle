@@ -1233,16 +1233,16 @@ window.destroyWall = function(index, isNetworkEvent = false) {
 window.createExplosion = createExplosion;
 window.createHitEffect = createHitEffect;
 
-// --- [BẢO MẬT] CẤU HÌNH API MỚI ---
-// Đã ẩn API Key. Game sẽ gọi qua Server trung gian.
-// Hãy chạy: node server.js trong thư mục server/
-const AI_SERVER_URL = "https://tankbattle-server.onrender.com"; 
-const MODEL_NAME = "llama-3.1-8b-instant";
+// CẤU HÌNH Groq
+const GROQ_API_KEY = "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"; 
 
-let aiTimer = 0; 
+// Cấu hình Groq - Dùng model Llama 3.1 mới nhất cho ổn định
+const AI_URL = "https://api.groq.com/openai/v1/chat/completions";
+const MODEL_NAME = "llama-3.1-8b-instant"; // Model này rất nhanh và ít lỗi 400
+
+let aiTimer = 0; // Đổi tên biến cho khớp với hàm updateAI
 let isAiThinking = false;
 
-// --- HÀM 1: AI CHIẾN THUẬT (Dùng Key General) ---
 async function consultAI(aiTank, enemyTank) {
     if (isAiThinking) return;
     
@@ -1254,6 +1254,8 @@ async function consultAI(aiTank, enemyTank) {
     const enHp = Math.round(enemyTank.hp) || 0;
     const weapon = aiTank.weaponType || "NORMAL"; 
 
+    // --- PROMPT MỚI: TEXT MODE (ỔN ĐỊNH HƠN) ---
+    // Yêu cầu trả về 1 từ duy nhất, không cần JSON phức tạp
     const fullPrompt = `
     Role: Tank AI.
     Stats: HP=${myHp}, EnemyHP=${enHp}, Dist=${distVal}, Weapon=${weapon}.
@@ -1268,25 +1270,32 @@ async function consultAI(aiTank, enemyTank) {
     Task: Return ONLY ONE WORD. Do not explain.
     `;
 
+    const requestBody = {
+        model: MODEL_NAME,
+        messages: [
+            { role: "user", content: fullPrompt }
+        ],
+        temperature: 0.5,
+        max_tokens: 50, // Tăng lên 50 để tránh bị cắt chữ
+        // response_format: { type: "json_object" } // <-- XÓA DÒNG NÀY ĐỂ TRÁNH LỖI 400
+    };
+
     try {
-        // Gọi đến Server nhà làm
-        const response = await fetch(AI_SERVER_URL, {
+        const response = await fetch(AI_URL, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                keyType: 'general', // Báo hiệu dùng Key chính
-                model: MODEL_NAME,
-                messages: [{ role: "user", content: fullPrompt }],
-                temperature: 0.5,
-                max_tokens: 50
-            })
+            headers: { 
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${GROQ_API_KEY}`
+            },
+            body: JSON.stringify(requestBody)
         });
 
-        if (!response.ok) throw new Error(`Server Status ${response.status}`);
+        if (!response.ok) throw new Error(`Groq Status ${response.status}`);
 
         const data = await response.json();
         
         if (data.choices && data.choices.length > 0) {
+            // Xử lý Text trả về (An toàn hơn JSON parse)
             const rawContent = data.choices[0].message.content.trim().toUpperCase();
             
             let strategy = "BALANCED";
@@ -1295,14 +1304,28 @@ async function consultAI(aiTank, enemyTank) {
             else if (rawContent.includes("CAMPER")) strategy = "CAMPER";
             else if (rawContent.includes("BALANCED")) strategy = "BALANCED";
 
+            // Áp dụng chiến thuật
             aiConfig.personality = strategy;
             const emoji = AI_PERSONALITY[strategy] ? AI_PERSONALITY[strategy].label : "🤖";
             window.aiThinkingText = emoji;
             
-            if (strategy === "SNIPER") { AI_CONFIG.viewAngle = 100 * (Math.PI / 180); AI_CONFIG.aimTolerance = 0.01; } 
-            else if (strategy === "RUSHER") { AI_CONFIG.viewAngle = 300 * (Math.PI / 180); AI_CONFIG.aimTolerance = 0.25; } 
-            else if (strategy === "CAMPER") { AI_CONFIG.viewAngle = 180 * (Math.PI / 180); AI_CONFIG.aimTolerance = 0.02; }
-            else { AI_CONFIG.viewAngle = 230 * (Math.PI / 180); AI_CONFIG.aimTolerance = 0.05; }
+            // Cập nhật thông số vật lý
+            if (strategy === "SNIPER") {
+                AI_CONFIG.viewAngle = 100 * (Math.PI / 180);
+                AI_CONFIG.aimTolerance = 0.01;
+            } 
+            else if (strategy === "RUSHER") {
+                AI_CONFIG.viewAngle = 300 * (Math.PI / 180);
+                AI_CONFIG.aimTolerance = 0.25;
+            } 
+            else if (strategy === "CAMPER") {
+                AI_CONFIG.viewAngle = 180 * (Math.PI / 180);
+                AI_CONFIG.aimTolerance = 0.02;
+            }
+            else { 
+                AI_CONFIG.viewAngle = 230 * (Math.PI / 180);
+                AI_CONFIG.aimTolerance = 0.05;
+            }
 
             console.log(`AI Update: ${strategy} (Wep:${weapon}, Dist:${distVal})`);
         }
@@ -1315,14 +1338,15 @@ async function consultAI(aiTank, enemyTank) {
     }
 }
 
+const GROQ_POWERUP_KEY = "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"; 
+
 let powerupAiTimer = 0;
 let isPowerupThinking = false;
 
-// --- HÀM 2: AI NHẶT ĐỒ & VŨ KHÍ (Dùng Key Powerup) ---
 async function consultPowerupAI(aiTank, enemyTank, availablePowerups) {
     if (isPowerupThinking) return;
     
-    // CASE 1: ĐÃ CÓ VŨ KHÍ -> HỎI CHIẾN THUẬT
+    // --- TRƯỜNG HỢP 1: ĐÃ CÓ VŨ KHÍ XỊN -> HỎI CHIẾN THUẬT DÙNG SÚNG ---
     if (aiTank.weaponType !== 'NORMAL') {
         isPowerupThinking = true;
         
@@ -1330,6 +1354,7 @@ async function consultPowerupAI(aiTank, enemyTank, availablePowerups) {
         const myHp = Math.round(aiTank.hp);
         const enHp = Math.round(enemyTank.hp);
 
+        // Prompt chuyên sâu về chiến thuật chiến đấu
         const combatPrompt = `
         Role: Tank Battle Expert.
         Context:
@@ -1346,14 +1371,16 @@ async function consultPowerupAI(aiTank, enemyTank, availablePowerups) {
         `;
 
         try {
-            const response = await fetch(AI_SERVER_URL, {
+            const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: { 
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${GROQ_POWERUP_KEY}`
+                },
                 body: JSON.stringify({
-                    keyType: 'powerup', // Báo hiệu dùng Key phụ
                     model: "llama-3.1-8b-instant",
                     messages: [{ role: "user", content: combatPrompt }],
-                    temperature: 0.3,
+                    temperature: 0.3, // Thấp để chọn mode chính xác
                     response_format: { type: "json_object" }
                 })
             });
@@ -1361,10 +1388,15 @@ async function consultPowerupAI(aiTank, enemyTank, availablePowerups) {
             if (response.ok) {
                 const data = await response.json();
                 const result = JSON.parse(data.choices[0].message.content);
+                
+                // --- CAN THIỆP SÂU VÀO HÀNH VI BOT ---
                 const newMode = result.mode || "BALANCED";
                 const reason = result.reason || "Attack";
 
+                // Cập nhật tính cách AI ngay lập tức
                 aiConfig.personality = newMode;
+                
+                // Cập nhật text hiển thị
                 window.aiThinkingText = `${aiTank.weaponType} ➤ ${newMode}`;
                 console.log(`[AI WEAPON TACTIC] ${aiTank.weaponType} -> Sets mode to ${newMode} (${reason})`);
             }
@@ -1372,25 +1404,32 @@ async function consultPowerupAI(aiTank, enemyTank, availablePowerups) {
             console.warn("Combat AI Error:", e);
         } finally {
             isPowerupThinking = false;
+            // Đặt thời gian nghỉ lâu hơn chút vì đã có chiến thuật rồi
             powerupAiTimer = -200; 
         }
         return;
     }
 
-    // CASE 2: CHƯA CÓ VŨ KHÍ -> TÌM ĐỒ
+    // --- TRƯỜNG HỢP 2: ĐANG CẦM SÚNG CÙI (NORMAL) -> HỎI ĐI NHẶT CÁI GÌ ---
     if (availablePowerups.length === 0) return;
 
     isPowerupThinking = true;
 
     const candidates = availablePowerups
         .map((p, index) => ({
-            id: index, type: p.type, x: p.x, y: p.y,
-            myDist: Math.round(dist(aiTank.x, aiTank.y, p.x, p.y))
+            id: index,
+            type: p.type,
+            x: p.x, 
+            y: p.y,
+            myDist: Math.round(dist(aiTank.x, aiTank.y, p.x, p.y)),
+            enemyDist: Math.round(dist(enemyTank.x, enemyTank.y, p.x, p.y))
         }))
         .sort((a, b) => a.myDist - b.myDist)
         .slice(0, 3);
 
-    const itemsList = candidates.map(c => `ID:${c.id} | Name:${c.type} | Dist:${c.myDist}`).join('\n');
+    const itemsList = candidates.map(c => 
+        `ID:${c.id} | Name:${c.type} | Dist:${c.myDist}`
+    ).join('\n');
 
     const lootPrompt = `
     Role: Scavenger AI.
@@ -1403,11 +1442,13 @@ async function consultPowerupAI(aiTank, enemyTank, availablePowerups) {
     `;
 
     try {
-        const response = await fetch(AI_SERVER_URL, {
+        const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: { 
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${GROQ_POWERUP_KEY}`
+            },
             body: JSON.stringify({
-                keyType: 'powerup', // Báo hiệu dùng Key phụ
                 model: "llama-3.1-8b-instant",
                 messages: [{ role: "user", content: lootPrompt }],
                 temperature: 0.2,
@@ -1426,7 +1467,7 @@ async function consultPowerupAI(aiTank, enemyTank, availablePowerups) {
                 if (targetItem) {
                     aiTank.forceMoveTarget = { x: targetItem.x, y: targetItem.y };
                     aiTank.aiState = "FETCHING"; 
-                    aiConfig.personality = "RUSHER"; 
+                    aiConfig.personality = "RUSHER"; // Khi đi nhặt đồ thì phải nhanh (Aggressive)
                     window.aiThinkingText = `✨ ${tactic}`; 
                 }
             }
@@ -1439,7 +1480,8 @@ async function consultPowerupAI(aiTank, enemyTank, availablePowerups) {
     }
 }
 
-// --- HÀM 3: UPDATE TÍNH CÁCH (Dùng Key Powerup) ---
+// AI Đổi Tính Cách (Dùng GROQ_POWERUP_KEY)
+// Gọi mỗi 10 giây để thay đổi tham số AI
 async function updateAiPersonality(aiHP, playerHP) {
     const prompt = `
     Situation: My HP: ${aiHP}, Enemy HP: ${playerHP}.
@@ -1448,11 +1490,13 @@ async function updateAiPersonality(aiHP, playerHP) {
     `;
 
     try {
-        const response = await fetch(AI_SERVER_URL, {
+        const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: { 
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${GROQ_POWERUP_KEY}` // Dùng Key 2
+            },
             body: JSON.stringify({
-                keyType: 'powerup', // Báo hiệu dùng Key phụ
                 model: "llama-3.1-8b-instant",
                 messages: [{ role: "user", content: prompt }],
                 response_format: { type: "json_object" }
@@ -1464,14 +1508,14 @@ async function updateAiPersonality(aiHP, playerHP) {
             const strategy = JSON.parse(data.choices[0].message.content);
             console.log("AI Strategy Update:", strategy.mode);
 
+            // Cập nhật tham số AI dựa trên API
             if (strategy.mode === "AGGRESSIVE") {
-                AI_CONFIG.viewAngle = 360 * (Math.PI/180); 
-                AI_CONFIG.aimTolerance = 0.2; 
+                AI_CONFIG.viewAngle = 360 * (Math.PI/180); // Nhìn mọi hướng
+                AI_CONFIG.aimTolerance = 0.2; // Bắn ẩu hơn tí để nhanh
             } else {
-                AI_CONFIG.viewAngle = 180 * (Math.PI/180); 
-                AI_CONFIG.aimTolerance = 0.02; 
+                AI_CONFIG.viewAngle = 180 * (Math.PI/180); // Tập trung phía trước
+                AI_CONFIG.aimTolerance = 0.02; // Ngắm cực kỹ (Sniper mode)
             }
         }
     } catch (e) {}
-
 }
